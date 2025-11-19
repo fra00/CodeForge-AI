@@ -1,0 +1,29 @@
+.example-select-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.example-section-title {
+  color: #f0f0f0;
+}
+
+.select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.example-section {
+    width: 100%;
+}
+
+.select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}

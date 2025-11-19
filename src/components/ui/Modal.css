@@ -1,0 +1,79 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center; /* Ri-centra il modale verticalmente */
+  z-index: 5000; /* Valore molto alto per garantire che sia sopra a tutto */
+  padding: 2rem; /* Aggiunge un po' di spazio per schermi piccoli */
+  box-sizing: border-box;
+}
+
+.modal-content {
+  background: transparent;
+  width: 80%;
+  max-width: 600px;
+  position: relative;
+  display: flex; /* Permette alla card di riempire lo spazio */
+  max-height: 90vh; /* Limita l'altezza massima del modale */
+}
+
+/* Stili per la modalità a schermo intero */
+.modal-overlay.fullscreen {
+  padding: 0; /* Rimuove il padding per un vero fullscreen */
+}
+
+.modal-content.fullscreen {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+/* Sovrascrive gli stili della Card per il layout del modale */
+.modal-card {
+  width: 100%;
+  padding: 0; /* Rimuove il padding di default della card */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Questo è importante */
+}
+
+.modal-close-button {
+  position: absolute;
+  top: 1.5rem; /* Allineato con il nuovo padding dell'header */
+  right: 1.5rem; /* Allineato con il nuovo padding dell'header */
+  background: none;
+  border: none;
+  z-index: 10; /* Assicura che sia sopra il contenuto */
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: #a0a0a0;
+}
+
+.modal-close-button:hover {
+  color: #fff;
+}
+
+.modal-card > .card-header {
+  padding: 1.5rem;
+  padding-right: 3rem; /* Spazio per il pulsante di chiusura */
+  border-bottom: 1px solid var(--card-border-color);
+  flex-shrink: 0; /* Impedisce all'header di restringersi */
+}
+
+.modal-body {
+  overflow-y: auto; /* Abilita lo scroll solo per il corpo */
+  padding: 1.5rem; /* Padding per il contenuto */
+}
+
+.modal-card > .card-footer {
+  padding: 1.5rem;
+  border-top: 1px solid var(--card-border-color);
+  flex-shrink: 0; /* Impedisce al footer di restringersi */
+  margin-top: 0; /* Sovrascrive il margine di default */
+}

@@ -1,0 +1,24 @@
+.example-button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.example-button-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #555;
+  color: #f0f0f0;
+  padding-bottom: 0.5rem;
+}
+
+.example-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}

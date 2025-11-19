@@ -1,0 +1,42 @@
+.code-block {
+  position: relative; /* Necessario per posizionare il pulsante di copia */
+  background-color: var(--code-block-bg);
+  color: var(--code-block-color);
+  font-family: "Fira Code", "Courier New", Courier, monospace;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto; /* Permette lo scroll orizzontale se il codice è lungo */
+  font-size: 0.875em;
+  margin-top: 1rem;
+  border: 1px solid var(--code-block-border-color);
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8em;
+  font-family: inherit;
+  cursor: pointer;
+  opacity: 0; /* Nascosto di default */
+  transition: opacity 0.2s ease-in-out;
+  z-index: 1;
+}
+
+.code-block:hover .copy-button {
+  opacity: 1; /* Mostra il pulsante al passaggio del mouse */
+}
+
+.code-block pre {
+  margin: 0;
+}
+
+.code-block code {
+  white-space: pre-wrap; /* Va a capo se necessario */
+  word-wrap: break-word;
+}

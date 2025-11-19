@@ -1,0 +1,7 @@
+@import './FormControl.css';
+
+/* Stili specifici per il componente Textarea */
+.form-textarea {
+  min-height: 100px; /* Altezza minima per una buona usabilità */
+  resize: vertical; /* Permetti all'utente di ridimensionare verticalmente */
+}

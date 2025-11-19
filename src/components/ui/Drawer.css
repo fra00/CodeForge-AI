@@ -1,0 +1,106 @@
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0);
+  z-index: 1100;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.drawer-overlay-open {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  height: 100%;
+  width: 90%;
+  max-width: 400px;
+  background-color: var(--color-background);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  z-index: 10;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: var(--color-secondary);
+  padding: 0.5rem;
+  line-height: 1;
+}
+
+.drawer-close-button:hover {
+  color: var(--color-text-light);
+}
+
+.drawer-panel-left {
+  left: 0;
+  transform: translateX(-100%);
+}
+
+.drawer-panel-right {
+  right: 0;
+  transform: translateX(100%);
+}
+
+.drawer-panel-open {
+  transform: translateX(0);
+}
+
+.drawer-handle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rem;
+  height: 4rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--form-border-color);
+  cursor: pointer;
+  z-index: 1099; /* Sotto l'overlay del drawer ma sopra il resto */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 1;
+}
+
+.drawer-handle-left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+}
+
+.drawer-handle-right {
+  right: 0;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+}
+
+.drawer-handle-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.drawer-handle-icon {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid var(--color-secondary);
+  border-right: 0;
+  border-bottom: 0;
+  transform: rotate(45deg);
+}
+
+.drawer-handle-left .drawer-handle-icon {
+  transform: rotate(225deg);
+}

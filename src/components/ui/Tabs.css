@@ -1,0 +1,63 @@
+.tabs-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column; /* Layout verticale di default (mobile-first) */
+}
+
+.tab-list {
+  display: flex;
+  flex-direction: row; /* Le tab sono sempre in riga */
+  border-bottom: 2px solid var(--color-border);
+  overflow-x: auto; /* Permette lo scroll orizzontale delle tab su mobile */
+  -webkit-overflow-scrolling: touch; /* Migliora lo scroll su iOS */
+  scrollbar-width: none; /* Nasconde la scrollbar su Firefox */
+}
+.tab-list::-webkit-scrollbar {
+  display: none; /* Nasconde la scrollbar su Chrome/Safari */
+}
+
+.tab {
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  border: none;
+  background-color: transparent;
+  color: var(--color-secondary);
+  font-size: 1em;
+  font-weight: 500;
+  position: relative;
+  border-bottom: 2px solid transparent; /* Placeholder for active state */
+  margin-bottom: -2px; /* Overlap the container's border */
+  transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.tab:hover {
+  color: var(--color-text-light);
+}
+
+.tab.tab-active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tab-panel {
+  padding: 1rem 0.25rem;
+}
+
+/* Stili per schermi più grandi (da --breakpoint-md in su) */
+@media (min-width: var(--breakpoint-md)) {
+  .tabs-container {
+    flex-direction: row; /* Layout orizzontale per desktop */
+  }
+
+  .tab-list {
+    flex-direction: column; /* Tab impilate verticalmente */
+    border-bottom: none;
+    border-right: 2px solid var(--color-border);
+  }
+}

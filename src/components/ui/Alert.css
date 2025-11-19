@@ -1,0 +1,57 @@
+.alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 1em;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.alert-content {
+  flex-grow: 1;
+  text-align: left;
+}
+
+.alert-close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.alert-close-button:hover {
+  opacity: 1;
+}
+
+/* Varianti di colore */
+.alert-info {
+  color: var(--alert-info-text);
+  background-color: var(--alert-info-bg);
+  border-color: var(--alert-info-border);
+}
+
+.alert-success {
+  color: var(--alert-success-text);
+  background-color: var(--alert-success-bg);
+  border-color: var(--alert-success-border);
+}
+
+.alert-warning {
+  color: var(--alert-warning-text);
+  background-color: var(--alert-warning-bg);
+  border-color: var(--alert-warning-border);
+}
+
+.alert-danger {
+  color: var(--alert-danger-text);
+  background-color: var(--alert-danger-bg);
+  border-color: var(--alert-danger-border);
+}

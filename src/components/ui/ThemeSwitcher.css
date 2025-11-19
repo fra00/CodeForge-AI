@@ -1,0 +1,4 @@
+.theme-switcher-container {
+  /* Il posizionamento è ora gestito dal componente genitore (es. Toolbar). */
+  /* Questo permette di integrare il componente nel layout senza sovrapposizioni. */
+}

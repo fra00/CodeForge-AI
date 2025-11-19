@@ -1,0 +1,12 @@
+.custom-card-style {
+  background: linear-gradient(45deg, var(--color-primary), #e06c75);
+  color: var(
+    --btn-primary-text
+  ); /* Usa un colore testo che funzioni sul gradiente */
+  border-color: transparent;
+}
+
+.custom-card-style .card-header {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+  color: inherit;
+}

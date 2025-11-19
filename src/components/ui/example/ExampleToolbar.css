@@ -1,0 +1,12 @@
+.toolbar-example-container {
+  /* Simula l'aspetto della vera toolbar ma dentro una card */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border: 1px dashed var(--card-border-color);
+  border-radius: 8px;
+  background-color: var(--card-bg); /* Usa lo stesso sfondo per coerenza */
+  height: 60px;
+  box-sizing: border-box;
+}

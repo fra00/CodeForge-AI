@@ -1,0 +1,73 @@
+.button {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s;
+  margin: 0 0.25rem;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Utilizzo delle variabili di tema */
+
+.button.primary {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-border);
+}
+
+.button.primary:hover {
+  filter: brightness(1.1);
+}
+
+.button.secondary {
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border-color: var(--btn-secondary-border);
+}
+
+.button.secondary:hover {
+  background-color: var(--btn-secondary-hover-bg);
+}
+
+/* Aggiungere qui le altre varianti: danger, ghost, etc. */
+
+.button.ghost {
+  background-color: var(--btn-ghost-bg);
+  color: var(--btn-ghost-text);
+  border-color: transparent;
+}
+
+.button.ghost:hover {
+  background-color: var(--btn-ghost-hover-bg);
+}
+
+.button.danger {
+  background-color: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+  border-color: var(--btn-danger-border);
+}
+
+.button.danger:hover {
+  filter: brightness(0.9);
+}
+
+/* Dimensioni */
+.button.small {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.875em;
+}
+
+/* .medium è lo stile di default di .button */
+
+.button.large {
+  padding: 0.8rem 1.5rem;
+  font-size: 1.125em;
+}

@@ -1,0 +1,100 @@
+.table-container {
+  width: 100%;
+  /* L'overflow orizzontale viene gestito solo nella media query per desktop */
+}
+
+/* Stili di default (Mobile - Layout a "Card") */
+.table {
+  width: 100%;
+  border: 0;
+}
+
+.table thead {
+  display: none; /* Nasconde l'header della tabella su mobile */
+}
+
+.table tr {
+  display: block;
+  margin-bottom: 1rem;
+  border: 1px solid var(--card-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--card-bg);
+}
+
+.table td {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  text-align: right; /* Allinea il testo del valore a destra */
+  border-bottom: 1px solid var(--card-border-color);
+  color: var(--card-color);
+}
+
+.table td::before {
+  content: attr(data-label); /* Mostra il label dall'attributo data */
+  font-weight: 600;
+  color: var(--form-label-color); /* Usa una variabile più semantica */
+  text-align: left;
+  margin-right: 1rem; /* Spazio tra label e valore */
+}
+
+/* Rimuove il bordo inferiore dall'ultima "riga" della card */
+.table tr td:last-child {
+  border-bottom: none;
+}
+
+/* Stili per Desktop (da --breakpoint-md in su) */
+@media screen and (min-width: 768px) {
+  .table-container {
+    overflow-x: auto; /* Abilita lo scroll orizzontale solo se necessario */
+  }
+
+  .table {
+    border-collapse: collapse; /* Ripristina il comportamento tabellare */
+  }
+
+  .table thead {
+    display: table-header-group; /* Mostra l'header */
+  }
+
+  .table tr {
+    display: table-row; /* Ripristina il comportamento delle righe */
+    border: 0;
+    border-radius: 0;
+    margin-bottom: 0;
+    background-color: transparent;
+  }
+
+  .table tr:hover {
+    background-color: var(--accordion-header-hover-bg);
+  }
+
+  .table th,
+  .table td {
+    display: table-cell; /* Ripristina il comportamento delle celle */
+    text-align: left;
+  }
+
+  /* Ripristina il bordo inferiore per l'ultima cella, che era stato rimosso per la vista a card */
+  .table tr td:last-child {
+    border-bottom: 1px solid var(--card-border-color);
+  }
+
+  .table td::before {
+    display: none; /* Nasconde le etichette generate per il mobile */
+  }
+
+  .table th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    color: var(--color-secondary);
+    background-color: var(--accordion-header-bg);
+  }
+
+  .table tbody tr:last-child td {
+    border-bottom: none;
+  }
+}

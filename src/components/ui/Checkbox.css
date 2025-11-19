@@ -1,0 +1,63 @@
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.form-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.25em;
+  height: 1.25em;
+  border: 2px solid var(--form-border-color);
+  border-radius: 4px;
+  background-color: var(--form-bg);
+  position: relative;
+  transition: background-color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.form-checkbox:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.form-checkbox:checked::after {
+  content: "✔";
+  font-size: 1em;
+  color: var(--toggle-handle-bg); /* Colore del segno di spunta */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+.form-checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--form-focus-shadow-color);
+}
+
+.form-checkbox:disabled {
+  background-color: var(--form-disabled-bg);
+  border-color: var(--form-border-color);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.checkbox-label {
+  margin-left: 0.5rem;
+  font-size: 1em;
+  color: var(--form-label-color);
+  cursor: pointer;
+}
+
+.checkbox-wrapper:has(.form-checkbox:disabled) {
+  cursor: not-allowed;
+}
+
+.checkbox-wrapper:has(.form-checkbox:disabled) .checkbox-label {
+  color: var(--form-disabled-color);
+}

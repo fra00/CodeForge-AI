@@ -1,0 +1,90 @@
+.dialog-window {
+  position: fixed;
+  z-index: 4000; /* Alto, ma inferiore a quello del modale */
+  display: flex;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 5px 10px rgba(0, 0, 0, 0.1);
+  border-radius: var(--card-border-radius);
+  overflow: hidden; /* Importante per applicare il border-radius ai figli */
+  min-width: 300px;
+  min-height: 200px;
+}
+
+.dialog-card {
+  width: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--card-border-color);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--card-border-color);
+  flex-shrink: 0;
+  cursor: move; /* Cursore per il trascinamento */
+  user-select: none; /* Previene la selezione del testo durante il drag */
+  -webkit-user-select: none;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialog-close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #a0a0a0;
+  padding: 0.25rem;
+  margin-left: 1rem;
+  z-index: 10; /* Sopra il titolo */
+}
+
+.dialog-close-button:hover {
+  color: #fff;
+}
+
+.dialog-body {
+  flex-grow: 1;
+  overflow-y: auto; /* Scroll solo per il corpo */
+  padding: 1rem;
+}
+
+.dialog-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--card-border-color);
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.dialog-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: se-resize;
+  z-index: 10;
+  /* Stile per l'handle di ridimensionamento */
+  background-image: linear-gradient(
+    135deg,
+    transparent 0%,
+    transparent 50%,
+    rgba(170, 170, 170, 0.6) 50%,
+    rgba(170, 170, 170, 0.6) 75%,
+    transparent 75%,
+    transparent 100%
+  );
+  background-size: 8px 8px;
+}

@@ -1,0 +1,58 @@
+.article {
+  /*
+    La maggior parte dello stile tipografico (colori dei link, margini dei paragrafi, etc.)
+    è gestita dalle classi "prose" e "dark:prose-invert" di Tailwind Typography.
+    Queste classi sono collegate alle variabili di tema definite in tailwind.config.js
+    o nel CSS globale.
+
+    Questa classe .article serve per stili contenitore aggiuntivi.
+    La classe `prose` di default imposta una `max-width`. L'abbiamo rimossa con `max-w-none`
+    nel componente per avere pieno controllo qui.
+  */
+  background-color: var(--card-bg);
+  color: var(--card-color);
+  padding: 2rem;
+  border-radius: 12px;
+  margin: 1.5rem 0;
+  max-width: 42rem; /* Impostiamo una larghezza massima per la leggibilità */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/*
+  NOTA PER L'INTEGRAZIONE:
+  Per fare in modo che le classi "prose" di Tailwind usino le variabili di tema
+  di questa libreria (es. var(--card-color)), è necessario configurare
+  il plugin `@tailwindcss/typography` nel file `tailwind.config.js`.
+
+  Esempio di configurazione:
+  // tailwind.config.js
+  ...
+  theme: {
+    extend: {
+      typography: ({ theme }) => ({
+        DEFAULT: {
+          css: {
+            '--tw-prose-body': 'var(--card-color)',
+            '--tw-prose-headings': 'var(--card-color)',
+            '--tw-prose-lead': 'var(--card-color)',
+            '--tw-prose-links': 'var(--color-primary)',
+            '--tw-prose-bold': 'var(--card-color)',
+            '--tw-prose-counters': 'var(--color-secondary)',
+            '--tw-prose-bullets': 'var(--color-secondary)',
+            '--tw-prose-hr': 'var(--card-border-color)',
+            '--tw-prose-quotes': 'var(--card-color)',
+            '--tw-prose-quote-borders': 'var(--card-border-color)',
+            '--tw-prose-captions': 'var(--color-secondary)',
+            '--tw-prose-code': 'var(--code-block-color)',
+            '--tw-prose-pre-code': 'var(--code-block-color)',
+            '--tw-prose-pre-bg': 'var(--code-block-bg)',
+            '--tw-prose-th-borders': 'var(--card-border-color)',
+            '--tw-prose-td-borders': 'var(--card-border-color)',
+          },
+        },
+      }),
+    },
+  },
+  ...
+*/

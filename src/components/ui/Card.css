@@ -1,0 +1,10 @@
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border-color);
+  color: var(--card-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  overflow: hidden; /* Assicura che i figli con angoli non escano dal border-radius */
+}

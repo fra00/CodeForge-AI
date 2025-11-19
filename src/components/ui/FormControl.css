@@ -1,0 +1,61 @@
+/* Stili comuni per i controlli del form */
+.form-control-wrapper {
+  margin-bottom: 1rem;
+  text-align: left;
+  width: 100%;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--form-label-color);
+}
+
+.form-error-message {
+  color: var(--form-error-text-color);
+  font-size: 0.875em;
+  margin-top: 0.25rem;
+  min-height: 1.2em; /* Evita salti di layout */
+}
+
+/* Stili base per input, select, textarea */
+.form-input,
+.form-select,
+.form-textarea {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--form-color);
+  background-color: var(--form-bg);
+  background-clip: padding-box;
+  border: 1px solid var(--form-border-color);
+  border-radius: 8px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  box-sizing: border-box;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: 0;
+  border-color: var(--form-focus-border-color);
+  box-shadow: 0 0 0 0.2rem var(--form-focus-shadow-color);
+}
+
+.form-input.error,
+.form-select.error,
+.form-textarea.error {
+  border-color: var(--form-error-border-color);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+  background-color: var(--form-disabled-bg);
+  color: var(--form-disabled-color);
+  cursor: not-allowed;
+  opacity: 0.7;
+}

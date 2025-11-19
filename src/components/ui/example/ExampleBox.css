@@ -1,0 +1,5 @@
+.custom-box {
+  background-color: var(--color-primary);
+  color: var(--btn-primary-text);
+  padding: 1rem;
+}
