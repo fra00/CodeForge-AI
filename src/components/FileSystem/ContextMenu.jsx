@@ -6,10 +6,11 @@ import { FilePlus, FolderPlus, Edit, Trash, Copy, X } from 'lucide-react';
 /**
  * Componente per il singolo elemento del menu contestuale.
  */
-function ContextMenuItem({ icon: Icon, label, action, shortcut }) {
+function ContextMenuItem({ icon: Icon, label, action, shortcut, disabled = false }) {
   return (
     <button
       onClick={action}
+      disabled={disabled}
       className="flex justify-between items-center w-full px-3 py-1.5 text-sm text-white hover:bg-blue-600 transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <div className="flex items-center">
@@ -26,21 +27,24 @@ ContextMenuItem.propTypes = {
   label: PropTypes.string.isRequired,
   action: PropTypes.func.isRequired,
   shortcut: PropTypes.string,
+  disabled: PropTypes.bool,
 };
 
 /**
  * Componente del menu contestuale che utilizza un Portal per il rendering.
  */
-export function ContextMenu({ x, y, targetId, onClose, onAction }) {
+export function ContextMenu({ x, y, targetId, onClose, onAction, files, rootId }) {
   const menuRef = useRef(null);
+
+  const isRoot = targetId === rootId;
 
   // Definisco le azioni del menu (placeholder)
   const menuItems = [
     { label: 'Nuovo File', icon: FilePlus, action: () => onAction('newFile', targetId), shortcut: 'Ctrl+N' },
     { label: 'Nuova Cartella', icon: FolderPlus, action: () => onAction('newFolder', targetId) },
     { type: 'separator' },
-    { label: 'Rinomina', icon: Edit, action: () => onAction('rename', targetId), shortcut: 'F2' },
-    { label: 'Elimina', icon: Trash, action: () => onAction('delete', targetId), shortcut: 'Del' },
+    { label: 'Rinomina', icon: Edit, action: () => onAction('rename', targetId), shortcut: 'F2', disabled: isRoot },
+    { label: 'Elimina', icon: Trash, action: () => onAction('delete', targetId), shortcut: 'Del', disabled: isRoot },
     { type: 'separator' },
     { label: 'Copia Percorso', icon: Copy, action: () => onAction('copyPath', targetId) },
   ];
@@ -79,7 +83,7 @@ export function ContextMenu({ x, y, targetId, onClose, onAction }) {
         if (item.type === 'separator') {
           return <div key={`sep-${index}`} className="border-t border-editor-border my-1 mx-2" />;
         }
-        return <ContextMenuItem key={item.label} {...item} />;
+        return <ContextMenuItem key={item.label} {...item} disabled={item.disabled} />;
       })}
     </div>,
     document.body // Renderizza nel body
@@ -92,4 +96,6 @@ ContextMenu.propTypes = {
   targetId: PropTypes.string.isRequired,
   onClose: PropTypes.func.isRequired,
   onAction: PropTypes.func.isRequired,
+  files: PropTypes.object.isRequired,
+  rootId: PropTypes.string.isRequired,
 };

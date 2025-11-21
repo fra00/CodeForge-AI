@@ -48,9 +48,10 @@ export async function testAPIKey(apiKey, modelName = DEFAULT_MODEL_NAME) {
  * @param {string} modelName - Il nome del modello LLM da usare.
  * @param {boolean} stream - Whether to stream the response.
  * @param {function} onChunk - Callback for streaming text chunks: (text: string) => void.
+ * @param {Object} [responseSchema] - Schema JSON per forzare l'output strutturato.
  * @returns {Promise<Object|void>} The final response object for non-streaming, or void for streaming.
  */
-export async function getChatCompletion({ messages, apiKey, modelName, stream = false, onChunk = () => {} }) {
+export async function getChatCompletion({ messages, apiKey, modelName, stream = false, onChunk = () => {}, responseSchema }) {
   if (!apiKey) {
     throw new Error('Anthropic API key is not set in settings.');
   }
@@ -66,6 +67,7 @@ export async function getChatCompletion({ messages, apiKey, modelName, stream = 
     max_tokens: 4096,
     messages: messages,
     stream: stream,
+    ...(responseSchema && { response_format: { type: 'json', schema: responseSchema } }),
   };
 
   try {

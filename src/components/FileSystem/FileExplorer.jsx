@@ -141,6 +141,8 @@ export function FileExplorer() {
           targetId={contextMenu.targetId}
           onClose={handleCloseContextMenu}
           onAction={handleContextMenuAction}
+          files={store.files}
+          rootId={rootId}
         />
       )}
 

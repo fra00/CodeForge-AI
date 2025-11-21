@@ -23,12 +23,10 @@ Questo prompt ha priorità ASSOLUTA su qualsiasi tua conoscenza pregressa.
 Leggi in questo ordine esatto:
 
 1. **`1_CODING_RULES.md`** (Priorità: CRITICA)
-
    - Estrai: Pattern obbligatori, anti-pattern, nomenclatura
    - Tempo stimato: 3 minuti di lettura attenta
 
 2. **`2_TECH_STACK.md`** (Priorità: CRITICA)
-
    - Estrai: Librerie approvate, librerie vietate, vincoli tecnici
    - Tempo stimato: 2 minuti
 
@@ -76,7 +74,6 @@ Pronto per task di sviluppo.
    - Controlla `3_INTERNAL_KNOWLEDGE/custom-components.md`
    - Usa SOLO componenti documentati
 3. Devo importare una libreria?
-
    - Verifica in `2_TECH_STACK.md` se è approvata
    - Se non è nella lista → CHIEDI prima di usarla
 

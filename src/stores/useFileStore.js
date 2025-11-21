@@ -48,6 +48,27 @@ const buildPath = (files, id) => {
   return path || "/";
 };
 
+/**
+ * Trova un nodo (file o cartella) dato il suo percorso completo.
+ * @param {object} files - La mappa dei file dello store.
+ * @param {string} path - Il percorso completo (es. '/src/App.jsx').
+ * @returns {object | undefined} Il nodo trovato o undefined.
+ */
+const findNodeByPath = (files, path) => {
+  // Normalizza il percorso: aggiunge lo slash iniziale se manca, a meno che non sia la root
+  const normalizedPath = path === "/" ? path : (path.startsWith("/") ? path : "/" + path);
+
+  // La root è un caso speciale
+  if (normalizedPath === "/") {
+    return files[ROOT_ID];
+  }
+
+  // Cerca il nodo iterando su tutti i file
+  return Object.values(files).find(
+    (node) => node.path === normalizedPath
+  );
+};
+
 // --- Store Definition ---
 
 export const useFileStore = create((set, get) => ({
@@ -432,6 +453,111 @@ export const useFileStore = create((set, get) => ({
         activeFileId: newActiveFileId,
       };
     });
+  },
+
+  /**
+   * Applica un set di azioni (creazione, modifica, eliminazione) al VFS.
+   * Utilizzata per eseguire le istruzioni strutturate dell'AI.
+   * @param {object[]} actions - Array di oggetti azione (path, content).
+   * @param {string} actionType - Tipo di azione ('create_files', 'update_files', 'delete_files').
+   */
+  applyFileActions: (actions, actionType) => {
+    const state = get();
+    const { createFileOrFolder, updateFileContent, deleteNode } = state;
+    const results = [];
+
+    for (const action of actions) {
+      const { path, content } = action;
+      const existingNode = findNodeByPath(state.files, path);
+
+      try {
+        if (actionType === "create_files") {
+          if (existingNode) {
+            results.push(`ERROR: File ${path} already exists.`);
+            continue;
+          }
+          // Estrai parentId e name dal path
+          const parts = path.split("/").filter(Boolean);
+          const name = parts.pop();
+          const parentPath = "/" + parts.join("/");
+          const parentNode = findNodeByPath(state.files, parentPath);
+
+          if (!parentNode || !parentNode.isFolder) {
+            results.push(
+              `ERROR: Parent folder for ${path} not found or is not a folder.`
+            );
+            continue;
+          }
+
+          createFileOrFolder(parentNode.id, name, false, content);
+          results.push(`SUCCESS: File ${path} created.`);
+        } else if (actionType === "update_files") {
+          if (!existingNode || existingNode.isFolder) {
+            results.push(`ERROR: File ${path} not found or is a folder.`);
+            continue;
+          }
+          updateFileContent(existingNode.id, content);
+          results.push(`SUCCESS: File ${path} updated.`);
+        } else if (actionType === "delete_files") {
+          if (!existingNode) {
+            results.push(`ERROR: Node ${path} not found.`);
+            continue;
+          }
+          // deleteNode è async, ma qui lo chiamiamo senza await per non bloccare il loop
+          deleteNode(existingNode.id);
+          results.push(`SUCCESS: Node ${path} deleted.`);
+        }
+      } catch (e) {
+        results.push(`FATAL ERROR on ${path}: ${e.message}`);
+      }
+    }
+
+    return results;
+  },
+
+  /**
+   * Esegue una richiesta di Tool Call (lettura/elenco) da parte dell'AI.
+   * @param {object} toolCall - Oggetto Tool Call con function_name e args.
+   * @returns {string} La risposta formattata per l'LLM.
+   */
+  executeToolCall: (toolCall) => {
+    const state = get();
+    const { function_name, args } = toolCall;
+
+    try {
+      if (function_name === "list_files") {
+        // 1. list_files: Restituisce un array di percorsi di file/cartelle
+        const filePaths = Object.values(state.files)
+          .filter((node) => node.id !== ROOT_ID)
+          .map((node) => node.path)
+          .sort();
+
+        return `TOOL_RESPONSE: list_files\n${JSON.stringify(filePaths, null, 2)}`;
+      } else if (function_name === "read_file") {
+        // 2. read_file: Restituisce il contenuto di un file specifico
+        const { path } = args;
+        const node = findNodeByPath(state.files, path);
+
+        if (!node) {
+          return `TOOL_RESPONSE: read_file\nERROR: File not found at path: ${path}`;
+        }
+        if (node.isFolder) {
+          return `TOOL_RESPONSE: read_file\nERROR: Cannot read content of a folder: ${path}`;
+        }
+
+        // Formatta il contenuto con i numeri di riga per una migliore leggibilità da parte dell'LLM
+        const contentWithLines = node.content
+          .split("\n")
+          .map((line, index) => `${index + 1} | ${line}`)
+          .join("\n");
+
+        return `TOOL_RESPONSE: read_file\nFile: ${path}\nContent:\n${contentWithLines}`;
+      }
+
+      return `TOOL_RESPONSE: ${function_name}\nERROR: Unknown function name.`;
+    } catch (e) {
+      return `TOOL_RESPONSE: ${function_name}\nFATAL ERROR: ${e.message}`;
+    }
   },
 
   // --- Editor/Tab Actions ---

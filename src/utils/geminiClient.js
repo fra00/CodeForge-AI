@@ -53,6 +53,7 @@ export async function testAPIKey(apiKey, modelName = DEFAULT_MODEL_NAME) {
  * @param {string} modelName - Il nome del modello LLM da usare.
  * @param {boolean} stream - Whether to stream the response.
  * @param {function} onChunk - Callback for streaming text chunks: (text: string) => void.
+ * @param {Object} [responseSchema] - Schema JSON per forzare l'output strutturato.
  * @returns {Promise<Object|void>} The final response object for non-streaming, or void for streaming.
  */
 export async function getChatCompletion({
@@ -61,6 +62,7 @@ export async function getChatCompletion({
   modelName,
   stream = false,
   onChunk = () => {},
+  responseSchema,
 }) {
   if (!apiKey) {
     throw new Error("Gemini API key is not set in settings.");
@@ -69,11 +71,17 @@ export async function getChatCompletion({
   const ai = new GoogleGenAI({ apiKey });
   const geminiMessages = convertMessagesToGeminiFormat(messages);
 
+  const config = {
+    maxOutputTokens: 4096,
+    ...(responseSchema && { responseMimeType: "application/json", responseSchema }),
+  };
+
   try {
     if (stream) {
       const responseStream = await ai.models.generateContentStream({
         model: modelName,
         contents: geminiMessages,
+        config,
       });
 
       for await (const chunk of responseStream) {
@@ -86,9 +94,11 @@ export async function getChatCompletion({
       const response = await ai.models.generateContent({
         model: modelName,
         contents: geminiMessages,
+        config,
       });
 
       if (response.text) {
+        // Se è richiesto JSON, il testo è il JSON stesso
         return { text: response.text };
       }
       throw new Error("Gemini API response format error or empty response.");
