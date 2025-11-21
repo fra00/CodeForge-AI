@@ -37,6 +37,7 @@ export async function getChatCompletion({
   modelName,
   stream = false,
   onChunk = () => {},
+  maxTokens = 8192,
 }) {
   if (provider === "claude") {
     return claudeClient.getChatCompletion({
@@ -54,6 +55,7 @@ export async function getChatCompletion({
       modelName,
       stream,
       onChunk,
+      maxTokens,
     });
   }
   throw new Error(`AI Provider non supportato: ${provider}`);

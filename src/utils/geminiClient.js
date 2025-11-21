@@ -63,6 +63,7 @@ export async function getChatCompletion({
   stream = false,
   onChunk = () => {},
   responseSchema,
+  maxTokens = 8192,
 }) {
   if (!apiKey) {
     throw new Error("Gemini API key is not set in settings.");
@@ -72,8 +73,11 @@ export async function getChatCompletion({
   const geminiMessages = convertMessagesToGeminiFormat(messages);
 
   const config = {
-    maxOutputTokens: 4096,
-    ...(responseSchema && { responseMimeType: "application/json", responseSchema }),
+    maxOutputTokens: maxTokens,
+    ...(responseSchema && {
+      responseMimeType: "application/json",
+      responseSchema,
+    }),
   };
 
   try {
@@ -96,6 +100,11 @@ export async function getChatCompletion({
         contents: geminiMessages,
         config,
       });
+
+      if (response.candidates[0].finishReason.toLowerCase() === "max_tokens") {
+        console.warn("Gemini response truncated due to max tokens limit.");
+        return { text: response.text, truncated: true };
+      }
 
       if (response.text) {
         // Se è richiesto JSON, il testo è il JSON stesso

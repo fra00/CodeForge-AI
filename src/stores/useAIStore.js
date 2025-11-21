@@ -28,15 +28,9 @@ const initialMessages = [
 
 /**
  * Estrae il contenuto JSON da un blocco di codice Markdown.
- * @param {string} text - Il testo che può contenere il blocco JSON.
- * @returns {string|null} Il contenuto JSON estratto, o null se non trovato.
  */
 const extractJsonFromMarkdown = (text) => {
-  if (!text || typeof text !== "string") {
-    return null;
-  }
-
-  // Rimuovi spazi bianchi iniziali/finali
+  if (!text || typeof text !== "string") return null;
   const trimmed = text.trim();
 
   // Strategia 1: Cerca blocco ```json ... ```
@@ -45,32 +39,29 @@ const extractJsonFromMarkdown = (text) => {
     return jsonBlockMatch[1].trim();
   }
 
-  // Strategia 2: Cerca blocco ``` ... ``` generico che potrebbe contenere JSON
+  // Strategia 2: Cerca blocco ``` ... ``` generico
   const genericBlockMatch = trimmed.match(/```\s*([\s\S]*?)\s*```/);
   if (genericBlockMatch && genericBlockMatch[1]) {
     const content = genericBlockMatch[1].trim();
-    // Verifica se sembra JSON
     if (content.startsWith("{") || content.startsWith("[")) {
       return content;
     }
   }
 
-  // Strategia 3: Trova il primo { e l'ultimo } per estrarre l'oggetto JSON
+  // Strategia 3: Trova parentesi graffe esterne
   const firstBrace = trimmed.indexOf("{");
   const lastBrace = trimmed.lastIndexOf("}");
-
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const extracted = trimmed.substring(firstBrace, lastBrace + 1);
-    // Verifica che sia JSON valido tentando il parse
     try {
-      JSON.parse(extracted);
+      const extracted = trimmed.substring(firstBrace, lastBrace + 1);
+      JSON.parse(extracted); // Test validità
       return extracted;
     } catch (e) {
-      // Non è JSON valido, continua
+      // Non valido, continua
     }
   }
 
-  // Strategia 4: Se l'intero testo sembra JSON, restituiscilo
+  // Strategia 4: Testo grezzo
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     return trimmed;
   }
@@ -79,59 +70,70 @@ const extractJsonFromMarkdown = (text) => {
 };
 
 /**
- * Valida la struttura base della risposta JSON dell'LLM
- * @param {Object} response - L'oggetto JSON parsato
- * @returns {boolean} True se la struttura è valida
+ * Sanitizza una stringa JSON
+ */
+const sanitizeJsonString = (jsonString) => {
+  if (!jsonString) return jsonString;
+  try {
+    JSON.parse(jsonString);
+    return jsonString;
+  } catch (e) {}
+
+  // Fix escape characters inside strings
+  let fixed = jsonString;
+  const stringPattern = /"([^"\\]*(\\.[^"\\]*)*)"/g;
+  fixed = fixed.replace(stringPattern, (match) => {
+    return match
+      .replace(/\\n/g, "\\n")
+      .replace(/\\t/g, "\\t")
+      .replace(/\\r/g, "\\r");
+  });
+  return fixed;
+};
+
+/**
+ * Valida la struttura della risposta
  */
 const validateResponseStructure = (response) => {
-  if (!response || typeof response !== "object") {
-    return false;
-  }
-
+  if (!response || typeof response !== "object") return false;
   const validActions = [
     "create_files",
     "update_files",
     "delete_files",
     "text_response",
     "tool_call",
+    "start_multi_file",
+    "continue_multi_file",
   ];
-
   return validActions.includes(response.action);
 };
 
 /**
- * Normalizza la risposta dell'LLM gestendo errori comuni
- * @param {Object} response - La risposta parsata dall'LLM
- * @returns {Object} La risposta normalizzata
+ * Normalizza la risposta per retrocompatibilità e pulizia
  */
 const normalizeResponse = (response) => {
   let normalized = { ...response };
 
-  // Mappa 'tool_code' a 'action'
+  // Mappa tool_code -> action
   if (!normalized.action && normalized.tool_code) {
     normalized.action = normalized.tool_code;
   }
 
-  // Gestisci la vecchia struttura 'actions' array
+  // Mappa array actions -> action singola
   if (
     !normalized.action &&
     normalized.actions &&
     Array.isArray(normalized.actions) &&
     normalized.actions.length > 0
   ) {
-    const firstAction = normalized.actions[0];
-    normalized.action = firstAction.type;
-    normalized.files = firstAction.files;
-    console.warn(
-      'LLM used deprecated "actions" array structure, normalized to current schema'
-    );
+    normalized.action = normalized.actions[0].type;
+    normalized.files = normalized.actions[0].files;
   }
 
-  // Normalizza i file (mappa 'file_path' e 'file_name' a 'path')
+  // Normalizza path dei file e rimuove oggetti malformati
   if (normalized.files && Array.isArray(normalized.files)) {
     normalized.files = normalized.files.map((file) => {
       const normalizedFile = { ...file };
-
       if (file.file_path && !file.path) {
         normalizedFile.path = file.file_path;
         delete normalizedFile.file_path;
@@ -139,12 +141,11 @@ const normalizeResponse = (response) => {
         normalizedFile.path = file.file_name;
         delete normalizedFile.file_name;
       }
-
       return normalizedFile;
     });
   }
 
-  // Mappa 'text' a 'response_text' per text_response
+  // Mappa text -> response_text
   if (
     normalized.action === "text_response" &&
     !normalized.response_text &&
@@ -152,15 +153,9 @@ const normalizeResponse = (response) => {
   ) {
     normalized.response_text = normalized.text;
   }
-
   return normalized;
 };
 
-/**
- * Crea una nuova chat
- * @param {string} id - ID opzionale per la chat
- * @returns {Object} Oggetto chat
- */
 const createNewChat = (id) => ({
   id: id || Date.now().toString(),
   title: "Nuova Chat",
@@ -169,108 +164,61 @@ const createNewChat = (id) => ({
 });
 
 /**
- * Costruisce il system prompt con il contesto del file
- * @param {Object} context - Contesto del file attivo
- * @returns {string} System prompt completo
+ * Costruisce il System Prompt Dinamico con regole rafforzate
  */
-const buildSystemPrompt = (context) => {
-  return `${SYSTEM_PROMPT}
+const buildSystemPrompt = (context, multiFileTaskState) => {
+  let prompt = `${SYSTEM_PROMPT}
+
+---
+
+# ⚠️ REGOLE CRITICHE PER I FILE (GOLDEN RULES)
+1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
+2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
+3. **JSON PURO**: Non scrivere testo introduttivo prima del JSON.
 
 ---
 
 # Istruzioni per l'Output Strutturato
 
-Devi rispondere ESCLUSIVAMENTE con un oggetto JSON valido. NON aggiungere testo prima o dopo il JSON.
+Devi rispondere ESCLUSIVAMENTE con un oggetto JSON valido.
+ 
+ ## 1. Risposta Solo Testuale
+Usa 'text_response' per spiegazioni o domande.
 
-**IMPORTANTE: 
-- Se la tua risposta è solo testuale (spiegazioni, discussioni), usa 'text_response'
-- Se devi creare o modificare file, usa 'create_files' o 'update_files'
-- Se devi leggere file esistenti o elencare file, usa 'tool_call'**
+## 2. Tool Call (Lettura File e Analisi)
+Usa 'tool_call' per interagire con il file system.
 
-## 1. Risposta Solo Testuale
-
-Usa quando devi solo rispondere con testo (spiegazioni, consigli, discussioni):
-
-\`\`\`json
-{
-  "action": "text_response",
-  "response_text": "La tua risposta testuale qui."
-}
-\`\`\`
-
-## 2. Tool Call (Lettura File)
-
-Usa quando hai bisogno di leggere file esistenti o ottenere informazioni sul filesystem:
-
-**list_files**: Elenca tutti i file nel VFS
+**list_files**: Elenca i file nel progetto.
 \`\`\`json
 {
   "action": "tool_call",
-  "tool_call": {
-    "function_name": "list_files",
-    "args": {}
-  }
+  "tool_call": { "function_name": "list_files", "args": {} }
 }
 \`\`\`
 
-**read_file**: Legge il contenuto di un file specifico
+**read_file**: Legge il contenuto dei file.
+IMPORTANTE: Se devi analizzare più file, NON leggerli uno alla volta.
+Usa il parametro "paths" (array) per richiedere TUTTI i file necessari in una sola chiamata.
+
+Esempio Batch Reading:
 \`\`\`json
 {
   "action": "tool_call",
   "tool_call": {
     "function_name": "read_file",
     "args": {
-      "path": "src/App.jsx"
+      "paths": ["src/App.jsx", "src/style.css", "src/utils.js"]
     }
   }
 }
 \`\`\`
 
-## 3. Azioni sul File System (VFS Actions)
+## 3. Azioni sul File System (Scrittura)
+Usa 'create_files', 'update_files', 'delete_files' per operazioni immediate.
+Ogni file DEVE avere "path".
 
-Usa quando devi creare nuovi file, modificare file esistenti o eliminare file:
-
-**create_files**: Crea uno o più nuovi file (sovrascrive se esistono già)
-\`\`\`json
-{
-  "action": "create_files",
-  "files": [
-    {
-      "path": "index.html",
-      "content": "<!DOCTYPE html>\\n<html>...</html>"
-    },
-    {
-      "path": "styles.css",
-      "content": "body { margin: 0; }"
-    }
-  ]
-}
-\`\`\`
-
-**update_files**: Modifica il contenuto completo di file esistenti (deve già esistere)
-\`\`\`json
-{
-  "action": "update_files",
-  "files": [
-    {
-      "path": "src/App.jsx",
-      "content": "import React from 'react';\\n\\nexport default function App() { return <h1>Updated</h1>; }"
-    }
-  ]
-}
-\`\`\`
-
-**delete_files**: Elimina uno o più file
-\`\`\`json
-{
-  "action": "delete_files",
-  "files": [
-    {
-      "path": "old-file.js"
-    }
-  ]
-}
-\`\`\`
+## 4. Multi-File Task (Modifiche Complesse)
+Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti file in sequenza.
 
 ---
 
@@ -282,19 +230,34 @@ Usa quando devi creare nuovi file, modificare file esistenti o eliminare file:
 \`\`\`${context.language || "text"}
 ${context.content || "(empty)"}
 \`\`\`
-
----
-
-# RICORDA:
-- Restituisci SOLO JSON valido
-- Usa 'create_files' per creare nuovi file (come index.html, app.js, ecc.)
-- NON usare blocchi di testo prima del JSON
-- Il JSON deve essere completo e valido
 `;
+
+  // Iniezione Stato Multi-File
+  if (multiFileTaskState) {
+    const nextFile = multiFileTaskState.remainingFiles[0];
+    prompt += `
+---
+# ⚠️ MULTI-FILE TASK IN CORSO
+Attualmente sei nel mezzo di un task multi-file. DEVI completare il piano.
+
+Piano: ${multiFileTaskState.plan}
+File completati: ${JSON.stringify(multiFileTaskState.completedFiles)}
+File Rimanenti: ${JSON.stringify(multiFileTaskState.remainingFiles)}
+
+## ISTRUZIONE CRITICA:
+Hai ancora ${multiFileTaskState.remainingFiles.length} file da processare.
+Il prossimo file che DEVI modificare è: "${nextFile}".
+
+La tua PROSSIMA risposta DEVE essere un JSON con action "continue_multi_file" per processare "${nextFile}".
+NON usare "text_response". NON fermarti. Procedi col codice per "${nextFile}".
+`;
+  }
+
+  return prompt;
 };
 
 /**
- * Schema JSON per la validazione delle risposte
+ * Schema JSON per la validazione (incluso 'paths' array)
  */
 const getResponseSchema = () => ({
   type: "object",
@@ -307,6 +270,8 @@ const getResponseSchema = () => ({
         "delete_files",
         "text_response",
         "tool_call",
+        "start_multi_file",
+        "continue_multi_file",
       ],
     },
     files: {
@@ -321,6 +286,7 @@ const getResponseSchema = () => ({
       },
     },
     response_text: { type: "string" },
+    message: { type: "string" },
     tool_call: {
       type: "object",
       properties: {
@@ -332,10 +298,38 @@ const getResponseSchema = () => ({
           type: "object",
           properties: {
             path: { type: "string" },
+            paths: { type: "array", items: { type: "string" } }, // Batch support
           },
         },
       },
       required: ["function_name", "args"],
+    },
+    plan: {
+      type: "object",
+      properties: {
+        description: { type: "string" },
+        files_to_modify: { type: "array", items: { type: "string" } },
+      },
+    },
+    first_file: {
+      type: "object",
+      properties: {
+        action: { type: "string" },
+        file: {
+          type: "object",
+          properties: { path: { type: "string" }, content: { type: "string" } },
+        },
+      },
+    },
+    next_file: {
+      type: "object",
+      properties: {
+        action: { type: "string" },
+        file: {
+          type: "object",
+          properties: { path: { type: "string" }, content: { type: "string" } },
+        },
+      },
     },
   },
   required: ["action"],
@@ -346,31 +340,23 @@ export const useAIStore = create((set, get) => ({
   currentChatId: null,
   isStreaming: false,
   error: null,
+  multiFileTaskState: null,
 
-  /**
-   * Ottiene i messaggi della chat corrente
-   * @returns {Array} Array di messaggi
-   */
   getMessages: () => {
     const { conversations, currentChatId } = get();
     const currentChat = conversations.find((c) => c.id === currentChatId);
     return currentChat ? currentChat.messages : initialMessages;
   },
 
-  /**
-   * Carica tutte le conversazioni da IndexedDB
-   */
   loadConversations: async () => {
     try {
       const dbConversations = await getAll(CONVERSATIONS_STORE_NAME);
       let conversations =
         dbConversations.length > 0 ? dbConversations : [createNewChat("1")];
-
       conversations.sort(
         (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
       );
       const currentChatId = conversations[conversations.length - 1].id;
-
       set({ conversations, currentChatId });
     } catch (e) {
       console.error("Failed to load AI conversations from IndexedDB:", e);
@@ -378,21 +364,14 @@ export const useAIStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Salva la conversazione corrente su IndexedDB
-   */
   saveConversation: async () => {
     const { conversations, currentChatId } = get();
     const chatToSave = conversations.find((c) => c.id === currentChatId);
-
     if (!chatToSave) return;
-
     const messagesToSave = chatToSave.messages.filter(
       (m) => m.role !== "system"
     );
-
     if (messagesToSave.length === 0) return;
-
     try {
       if (chatToSave.title === "Nuova Chat" && messagesToSave.length > 0) {
         const firstUserMessage = messagesToSave.find((m) => m.role === "user");
@@ -400,15 +379,12 @@ export const useAIStore = create((set, get) => ({
           chatToSave.title = firstUserMessage.content.substring(0, 30) + "...";
         }
       }
-
       const updatedChat = {
         ...chatToSave,
         messages: messagesToSave,
         timestamp: new Date().toISOString(),
       };
-
       await put(CONVERSATIONS_STORE_NAME, updatedChat);
-
       set((state) => ({
         conversations: state.conversations.map((c) =>
           c.id === updatedChat.id ? updatedChat : c
@@ -419,9 +395,6 @@ export const useAIStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Crea una nuova chat
-   */
   newChat: () => {
     const newChat = createNewChat();
     set((state) => ({
@@ -431,39 +404,26 @@ export const useAIStore = create((set, get) => ({
     }));
   },
 
-  /**
-   * Seleziona una chat esistente
-   * @param {string} chatId - ID della chat da selezionare
-   */
   selectChat: (chatId) => {
     set({ currentChatId: chatId, error: null });
   },
 
-  /**
-   * Elimina una chat
-   * @param {string} chatId - ID della chat da eliminare
-   */
   deleteChat: async (chatId) => {
-    const { conversations, currentChatId } = get();
-
+    const { conversations } = get();
     if (conversations.length === 1) {
       get().clearConversation();
       return;
     }
-
     try {
       await remove(CONVERSATIONS_STORE_NAME, chatId);
-
       set((state) => {
         const newConversations = state.conversations.filter(
           (c) => c.id !== chatId
         );
         let newCurrentChatId = state.currentChatId;
-
         if (state.currentChatId === chatId) {
           newCurrentChatId = newConversations[newConversations.length - 1].id;
         }
-
         return {
           conversations: newConversations,
           currentChatId: newCurrentChatId,
@@ -471,17 +431,25 @@ export const useAIStore = create((set, get) => ({
         };
       });
     } catch (e) {
-      console.error("Failed to delete AI conversation from IndexedDB:", e);
       set({ error: e.message });
     }
   },
 
   /**
-   * Aggiunge un messaggio alla conversazione corrente
-   * @param {Object} message - Messaggio da aggiungere
+   * 🛡️ GUARDIA DELLO STORE
+   * Impedisce l'aggiunta di messaggi vuoti che sporcano la UI e rompono l'API
    */
   addMessage: (message) =>
     set((state) => {
+      if (
+        !message ||
+        !message.content ||
+        message.content.toString().trim() === ""
+      ) {
+        console.warn("⚠️ [useAIStore] Messaggio vuoto scartato:", message);
+        return state;
+      }
+
       const { currentChatId, conversations } = state;
       const newConversations = conversations.map((chat) => {
         if (chat.id === currentChatId) {
@@ -492,25 +460,15 @@ export const useAIStore = create((set, get) => ({
         }
         return chat;
       });
-
-      return {
-        conversations: newConversations,
-        error: null,
-      };
+      return { conversations: newConversations, error: null };
     }),
 
-  /**
-   * Resetta la conversazione corrente
-   */
   clearConversation: () => {
     const { currentChatId } = get();
     set((state) => ({
       conversations: state.conversations.map((chat) => {
         if (chat.id === currentChatId) {
-          return {
-            ...chat,
-            messages: initialMessages,
-          };
+          return { ...chat, messages: initialMessages };
         }
         return chat;
       }),
@@ -519,13 +477,7 @@ export const useAIStore = create((set, get) => ({
   },
 
   /**
-   * Invia un messaggio all'AI e gestisce la risposta con tool calls
-   * @param {string} userMessage - Messaggio dell'utente
-   * @param {Object} context - Contesto del file attivo
-   * @param {string} provider - Provider AI ('claude' o 'gemini')
-   * @param {string} apiKey - Chiave API
-   * @param {string} modelName - Nome del modello
-   * @param {number} maxToolCalls - Numero massimo di tool calls (default: 5)
+   * Logica principale di interazione con l'AI
    */
   sendMessage: async (
     userMessage,
@@ -533,12 +485,11 @@ export const useAIStore = create((set, get) => ({
     provider,
     apiKey,
     modelName,
-    maxToolCalls = 5
+    maxToolCalls = 10
   ) => {
-    const { addMessage, currentChatId, conversations } = get();
+    const { addMessage, currentChatId } = get();
     const fileStore = useFileStore.getState();
 
-    // Validazione input
     if (!provider || !apiKey || !modelName) {
       set({
         error: "Missing required parameters: provider, apiKey, or modelName",
@@ -546,14 +497,13 @@ export const useAIStore = create((set, get) => ({
       return;
     }
 
-    if (!context) {
+    if (!context)
       context = { language: "text", currentFile: "none", content: "" };
-    }
 
     let toolCallCount = 0;
 
     try {
-      // Se c'è un nuovo messaggio utente, aggiungilo
+      // Aggiunta messaggio utente
       if (userMessage && userMessage.trim()) {
         const newUserMessage = {
           id: Date.now().toString(),
@@ -561,7 +511,7 @@ export const useAIStore = create((set, get) => ({
           content: userMessage.trim(),
         };
 
-        // Rimuovi il messaggio iniziale se presente
+        // Pulizia messaggio di benvenuto
         set((state) => {
           const newConversations = state.conversations.map((chat) => {
             if (chat.id === currentChatId) {
@@ -576,32 +526,35 @@ export const useAIStore = create((set, get) => ({
           });
           return { conversations: newConversations };
         });
-
         addMessage(newUserMessage);
       }
 
       set({ isStreaming: true, error: null });
-
-      const systemPromptWithContext = buildSystemPrompt(context);
       const responseSchema = getResponseSchema();
 
-      // Loop per gestire tool calls multipli
       while (toolCallCount < maxToolCalls) {
-        // Ottieni la cronologia aggiornata
         const currentChat = get().conversations.find(
           (c) => c.id === currentChatId
         );
         const conversationHistory = currentChat
           ? currentChat.messages
           : initialMessages;
+        const currentMultiFileState = get().multiFileTaskState;
 
-        // Prepara i messaggi per l'LLM
+        const systemPromptWithContext = buildSystemPrompt(
+          context,
+          currentMultiFileState
+        );
+
+        // 🛡️ FILTRO API: Rimuove messaggi vuoti dalla history prima di inviare
         const messagesForLLM = [
           { role: "system", content: systemPromptWithContext },
-          ...conversationHistory.filter((m) => m.role !== "system"),
+          ...conversationHistory
+            .filter((m) => m.role !== "system")
+            .filter((m) => m.content && m.content.toString().trim().length > 0),
         ];
 
-        // Chiamata all'LLM
+        // Chiamata LLM
         const response = await getChatCompletion({
           provider,
           apiKey,
@@ -609,153 +562,333 @@ export const useAIStore = create((set, get) => ({
           messages: messagesForLLM,
           stream: false,
           responseSchema,
-          //maxTokens: 4096, // Aumenta il limite per risposte lunghe con codice
+          maxTokens: 8192,
         });
 
-        // Parsing della risposta
-        const jsonString = extractJsonFromMarkdown(response.text);
-
-        if (!jsonString) {
-          console.error("Raw AI response:", response.text);
-          throw new Error(
-            `No valid JSON found in AI response. Response length: ${response.text?.length || 0} chars. Preview: ${response.text?.substring(0, 300)}...`
-          );
+        // Check Troncamento
+        if (response.truncated) {
+          addMessage({
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "⚠️ Risposta troncata (limite token).",
+          });
+          set({ isStreaming: false });
+          await get().saveConversation();
+          return;
         }
 
-        let parsedResponse;
-        try {
-          parsedResponse = JSON.parse(jsonString);
-        } catch (e) {
-          console.error("Failed to parse JSON:", jsonString.substring(0, 500));
-          throw new Error(
-            `Failed to parse JSON from AI response: ${e.message}\nJSON preview: ${jsonString.substring(0, 300)}...`
-          );
+        // Parsing Risposta
+        let rawText;
+        if (typeof response === "string") {
+          rawText = response;
+        } else if (response.text) {
+          rawText = response.text;
+        } else if (response.content) {
+          rawText = response.content;
+        } else if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
+          rawText = response.candidates[0].content.parts[0].text;
+        } else {
+          rawText = JSON.stringify(response);
         }
 
-        // Normalizza e valida la risposta
+        const jsonString = extractJsonFromMarkdown(rawText);
+        if (!jsonString) throw new Error("No valid JSON found in AI response.");
+
+        const sanitizedJson = sanitizeJsonString(jsonString);
+        let parsedResponse = JSON.parse(sanitizedJson);
         parsedResponse = normalizeResponse(parsedResponse);
 
         if (!validateResponseStructure(parsedResponse)) {
-          console.error("Invalid response structure:", parsedResponse);
-          throw new Error(
-            `Invalid action in AI response: ${parsedResponse.action || "undefined"}`
-          );
+          throw new Error(`Invalid action: ${parsedResponse.action}`);
         }
 
-        const { action, files, response_text, tool_call } = parsedResponse;
+        const {
+          action,
+          files,
+          response_text,
+          tool_call,
+          plan,
+          first_file,
+          next_file,
+          message,
+        } = parsedResponse;
 
-        // Gestione Tool Call
-        if (action === "tool_call" && tool_call) {
-          toolCallCount++;
+        // === START MULTI-FILE ===
+        if (action === "start_multi_file" && plan && first_file) {
+          set({
+            multiFileTaskState: {
+              plan: plan.description,
+              allFiles: plan.files_to_modify,
+              completedFiles: [],
+              remainingFiles: plan.files_to_modify,
+            },
+          });
 
-          console.log(
-            `[Tool Call ${toolCallCount}/${maxToolCalls}] ${tool_call.function_name}`,
-            tool_call.args
-          );
-
-          // Aggiungi messaggio dell'assistente che richiede il tool
-          const assistantToolMessage = {
-            id: `${Date.now()}-tool-req`,
-            role: "assistant",
-            content: `[Executing: ${tool_call.function_name}(${JSON.stringify(tool_call.args)})]`,
-          };
-          addMessage(assistantToolMessage);
-
-          // Esegui il tool call
-          let toolResult;
-          try {
-            toolResult = fileStore.executeToolCall(tool_call);
-          } catch (toolError) {
-            toolResult = `Error executing tool: ${toolError.message}`;
-            console.error("Tool execution error:", toolError);
-          }
-
-          // Aggiungi il risultato del tool come messaggio 'user'
-          const toolResponseMessage = {
-            id: `${Date.now()}-tool-res`,
-            role: "user",
-            content: `[Tool Result: ${tool_call.function_name}]\n${toolResult}`,
-          };
-          addMessage(toolResponseMessage);
-
-          // Continua il loop per la prossima chiamata LLM
-          continue;
-        }
-
-        // Gestione Risposta Testuale
-        if (action === "text_response") {
-          const textContent = response_text || parsedResponse.text;
-
-          if (!textContent) {
-            throw new Error('Missing text content for action "text_response"');
-          }
-
-          const finalMessage = {
+          // Fallback content
+          const msgContent = message || `📋 Start Task: ${plan.description}`;
+          addMessage({
             id: Date.now().toString(),
             role: "assistant",
-            content: textContent,
-          };
-          addMessage(finalMessage);
-          break; // Esci dal loop
+            content: msgContent,
+          });
+
+          try {
+            const results = fileStore.applyFileActions(
+              [first_file.file],
+              first_file.action
+            );
+            const resultText =
+              results.length > 0
+                ? results.join("\n")
+                : "✅ First file action completed.";
+            addMessage({
+              id: `${Date.now()}-res`,
+              role: "assistant",
+              content: resultText,
+            });
+
+            const currentPath = first_file.file.path;
+            set((state) => ({
+              multiFileTaskState: {
+                ...state.multiFileTaskState,
+                completedFiles: [currentPath],
+                remainingFiles: state.multiFileTaskState.remainingFiles.filter(
+                  (f) => f !== currentPath
+                ),
+              },
+            }));
+
+            if (get().multiFileTaskState.remainingFiles.length > 0) {
+              toolCallCount++;
+              continue;
+            } else {
+              set({ multiFileTaskState: null });
+              break;
+            }
+          } catch (e) {
+            addMessage({
+              id: Date.now().toString(),
+              role: "assistant",
+              content: `Error: ${e.message}`,
+            });
+            set({ multiFileTaskState: null });
+            break;
+          }
         }
 
-        // Gestione Azioni VFS
-        if (
-          ["create_files", "update_files", "delete_files"].includes(action) &&
-          files
-        ) {
-          if (!Array.isArray(files) || files.length === 0) {
-            throw new Error(
-              `Invalid or empty files array for action "${action}"`
-            );
+        // === CONTINUE MULTI-FILE ===
+        if (action === "continue_multi_file" && next_file) {
+          const taskState = get().multiFileTaskState;
+          if (!taskState) {
+            addMessage({
+              id: Date.now().toString(),
+              role: "assistant",
+              content: "⚠️ No active task state found.",
+            });
+            break;
           }
 
-          console.log(`[VFS Action] ${action}`, files);
+          const msgContent =
+            message || `Continuing with ${next_file.file.path}...`;
+          addMessage({
+            id: Date.now().toString(),
+            role: "assistant",
+            content: msgContent,
+          });
 
+          try {
+            const results = fileStore.applyFileActions(
+              [next_file.file],
+              next_file.action
+            );
+            const resultText =
+              results.length > 0 ? results.join("\n") : "✅ Action completed.";
+            addMessage({
+              id: `${Date.now()}-res`,
+              role: "assistant",
+              content: resultText,
+            });
+
+            const currentPath = next_file.file.path;
+            set((state) => ({
+              multiFileTaskState: {
+                ...state.multiFileTaskState,
+                completedFiles: [
+                  ...state.multiFileTaskState.completedFiles,
+                  currentPath,
+                ],
+                remainingFiles: state.multiFileTaskState.remainingFiles.filter(
+                  (f) => f !== currentPath
+                ),
+              },
+            }));
+
+            if (get().multiFileTaskState.remainingFiles.length > 0) {
+              toolCallCount++;
+              continue;
+            } else {
+              addMessage({
+                id: Date.now().toString(),
+                role: "assistant",
+                content: "✅ Multi-file task completed.",
+              });
+              set({ multiFileTaskState: null });
+              break;
+            }
+          } catch (e) {
+            addMessage({
+              id: Date.now().toString(),
+              role: "assistant",
+              content: `Error: ${e.message}`,
+            });
+            set({ multiFileTaskState: null });
+            break;
+          }
+        }
+
+        // === GESTIONE TOOL CALL (BATCH & SINGLE) ===
+        if (action === "tool_call" && tool_call) {
+          toolCallCount++;
+          const isBatchRead =
+            tool_call.function_name === "read_file" &&
+            Array.isArray(tool_call.args.paths);
+
+          const logArgs = isBatchRead
+            ? `(Batch: ${tool_call.args.paths.length} files)`
+            : `(Args: ${JSON.stringify(tool_call.args)})`;
+
+          addMessage({
+            id: `${Date.now()}-tool-req`,
+            role: "assistant",
+            content: `[Executing: ${tool_call.function_name} ${logArgs}]`,
+          });
+
+          let toolResult = "";
+
+          try {
+            if (isBatchRead) {
+              const paths = tool_call.args.paths;
+              const results = [];
+              for (const path of paths) {
+                try {
+                  const singleResult = fileStore.executeToolCall({
+                    function_name: "read_file",
+                    args: { path: path },
+                  });
+                  const safeContent = singleResult || "(Empty File)";
+                  results.push(`--- FILE: ${path} ---\n${safeContent}`);
+                } catch (err) {
+                  results.push(
+                    `--- ERROR READING FILE: ${path} ---\n${err.message}`
+                  );
+                }
+              }
+              toolResult = results.join("\n\n");
+            } else {
+              toolResult = fileStore.executeToolCall(tool_call);
+            }
+          } catch (e) {
+            toolResult = `Error executing tool: ${e.message}`;
+          }
+
+          // Fallback Content per evitare stringhe vuote
+          if (!toolResult || toolResult.trim() === "") {
+            toolResult =
+              "[Action executed successfully, but returned no content]";
+          }
+
+          addMessage({
+            id: `${Date.now()}-tool-res`,
+            role: "user",
+            content: `[Tool Result]\n${toolResult}`,
+          });
+
+          continue; // LOOP
+        }
+
+        // === TEXT RESPONSE ===
+        if (action === "text_response") {
+          const finalContent =
+            response_text || parsedResponse.text || "✅ Done.";
+          addMessage({
+            id: Date.now().toString(),
+            role: "assistant",
+            content: finalContent,
+          });
+          break;
+        }
+
+        // === VFS ACTIONS (SINGLE) ===
+        if (["create_files", "update_files", "delete_files"].includes(action)) {
+          // 1. Controllo esistenza array
+          if (!files || !Array.isArray(files) || files.length === 0) {
+            const errorMsg = `❌ Error: Action '${action}' requires a 'files' array, but it was missing or empty.`;
+            addMessage({
+              id: `${Date.now()}-err`,
+              role: "user",
+              content: errorMsg,
+            });
+            continue;
+          }
+
+          // 2. AUTO-CORREZIONE: Controllo integrità Path
+          const filesWithMissingPath = files.filter(
+            (f) => !f.path || typeof f.path !== "string" || f.path.trim() === ""
+          );
+
+          if (filesWithMissingPath.length > 0) {
+            console.warn(
+              "AI attempted to operate on files without path:",
+              filesWithMissingPath
+            );
+            const errorMsg = `❌ CRITICAL ERROR: You attempted '${action}' without specifying "path".
+REQUIRED ACTION: Regenerate JSON providing "path" for all files.`;
+            addMessage({
+              id: `${Date.now()}-path-err`,
+              role: "user",
+              content: errorMsg,
+            });
+            continue; // Forza Retry
+          }
+
+          // 3. Esecuzione Sicura
           let results;
           try {
             results = fileStore.applyFileActions(files, action);
-          } catch (vfsError) {
-            results = [`Error: ${vfsError.message}`];
-            console.error("VFS action error:", vfsError);
+          } catch (e) {
+            console.error("VFS Execution Error:", e);
+            results = [`Error: ${e.message}`];
           }
 
-          const vfsMessage = {
+          const resultText =
+            results.length > 0
+              ? results.map((r) => `• ${r}`).join("\n")
+              : "Files processed successfully.";
+
+          addMessage({
             id: Date.now().toString(),
             role: "assistant",
-            content: `✓ VFS Action: ${action}\n\nResults:\n${results.map((r) => `  • ${r}`).join("\n")}`,
-          };
-          addMessage(vfsMessage);
-          break; // Esci dal loop
+            content: `✓ Action: ${action}\n\n${resultText}`,
+          });
+          break;
         }
-
-        // Se arriviamo qui, c'è un problema con la risposta
-        throw new Error(
-          `Unhandled action or invalid response structure: ${JSON.stringify(parsedResponse)}`
-        );
       }
 
-      // Controllo limite tool calls
       if (toolCallCount >= maxToolCalls) {
-        const limitMessage = {
+        addMessage({
           id: Date.now().toString(),
           role: "assistant",
-          content: `⚠️ Maximum tool call limit reached (${maxToolCalls}). Please try breaking down your request into smaller steps.`,
-        };
-        addMessage(limitMessage);
-        console.warn("Maximum tool call limit reached");
+          content: "⚠️ Operation limit reached.",
+        });
       }
     } catch (e) {
       console.error("Error in AI conversation:", e);
-      set({ error: e.message || "An unknown error occurred" });
-
-      // Aggiungi un messaggio di errore visibile all'utente
-      const errorMessage = {
+      set({ error: e.message });
+      addMessage({
         id: Date.now().toString(),
         role: "assistant",
         content: `❌ Error: ${e.message}`,
-      };
-      addMessage(errorMessage);
+      });
     } finally {
       set({ isStreaming: false });
       await get().saveConversation();
