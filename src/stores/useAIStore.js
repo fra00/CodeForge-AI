@@ -36,14 +36,41 @@ const extractJsonFromMarkdown = (text) => {
     return null;
   }
 
-  // Prova a estrarre da blocco markdown
-  const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (match && match[1]) {
-    return match[1].trim();
+  // Rimuovi spazi bianchi iniziali/finali
+  const trimmed = text.trim();
+
+  // Strategia 1: Cerca blocco ```json ... ```
+  const jsonBlockMatch = trimmed.match(/```json\s*([\s\S]*?)\s*```/);
+  if (jsonBlockMatch && jsonBlockMatch[1]) {
+    return jsonBlockMatch[1].trim();
   }
 
-  // Se non c'è blocco markdown, prova a vedere se l'intero testo è JSON
-  const trimmed = text.trim();
+  // Strategia 2: Cerca blocco ``` ... ``` generico che potrebbe contenere JSON
+  const genericBlockMatch = trimmed.match(/```\s*([\s\S]*?)\s*```/);
+  if (genericBlockMatch && genericBlockMatch[1]) {
+    const content = genericBlockMatch[1].trim();
+    // Verifica se sembra JSON
+    if (content.startsWith("{") || content.startsWith("[")) {
+      return content;
+    }
+  }
+
+  // Strategia 3: Trova il primo { e l'ultimo } per estrarre l'oggetto JSON
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const extracted = trimmed.substring(firstBrace, lastBrace + 1);
+    // Verifica che sia JSON valido tentando il parse
+    try {
+      JSON.parse(extracted);
+      return extracted;
+    } catch (e) {
+      // Non è JSON valido, continua
+    }
+  }
+
+  // Strategia 4: Se l'intero testo sembra JSON, restituiscilo
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     return trimmed;
   }
@@ -153,11 +180,16 @@ const buildSystemPrompt = (context) => {
 
 # Istruzioni per l'Output Strutturato
 
-Devi rispondere ESCLUSIVAMENTE con un oggetto JSON che segue lo schema fornito.
+Devi rispondere ESCLUSIVAMENTE con un oggetto JSON valido. NON aggiungere testo prima o dopo il JSON.
 
-**IMPORTANTE: Se la tua risposta è solo testuale (non contiene codice o azioni VFS), DEVI usare l'azione 'text_response'.**
+**IMPORTANTE: 
+- Se la tua risposta è solo testuale (spiegazioni, discussioni), usa 'text_response'
+- Se devi creare o modificare file, usa 'create_files' o 'update_files'
+- Se devi leggere file esistenti o elencare file, usa 'tool_call'**
 
 ## 1. Risposta Solo Testuale
+
+Usa quando devi solo rispondere con testo (spiegazioni, consigli, discussioni):
 
 \`\`\`json
 {
@@ -168,12 +200,20 @@ Devi rispondere ESCLUSIVAMENTE con un oggetto JSON che segue lo schema fornito.
 
 ## 2. Tool Call (Lettura File)
 
-Se hai bisogno di leggere il contenuto di un file o di elencare i file, rispondi con l'azione 'tool_call'.
+Usa quando hai bisogno di leggere file esistenti o ottenere informazioni sul filesystem:
 
-- **list_files**: Elenca tutti i file nel VFS.
-- **read_file**: Legge il contenuto di un file specifico.
+**list_files**: Elenca tutti i file nel VFS
+\`\`\`json
+{
+  "action": "tool_call",
+  "tool_call": {
+    "function_name": "list_files",
+    "args": {}
+  }
+}
+\`\`\`
 
-### Esempio Tool Call:
+**read_file**: Legge il contenuto di un file specifico
 \`\`\`json
 {
   "action": "tool_call",
@@ -188,20 +228,45 @@ Se hai bisogno di leggere il contenuto di un file o di elencare i file, rispondi
 
 ## 3. Azioni sul File System (VFS Actions)
 
-Se hai generato il codice o devi eliminare un file, rispondi con una delle seguenti azioni:
+Usa quando devi creare nuovi file, modificare file esistenti o eliminare file:
 
-- **create_files**: Crea uno o più file.
-- **update_files**: Modifica il contenuto completo di uno o più file esistenti.
-- **delete_files**: Elimina uno o più file/cartelle.
+**create_files**: Crea uno o più nuovi file (sovrascrive se esistono già)
+\`\`\`json
+{
+  "action": "create_files",
+  "files": [
+    {
+      "path": "index.html",
+      "content": "<!DOCTYPE html>\\n<html>...</html>"
+    },
+    {
+      "path": "styles.css",
+      "content": "body { margin: 0; }"
+    }
+  ]
+}
+\`\`\`
 
-### Esempio VFS Action (Update):
+**update_files**: Modifica il contenuto completo di file esistenti (deve già esistere)
 \`\`\`json
 {
   "action": "update_files",
   "files": [
     {
       "path": "src/App.jsx",
-      "content": "import React from 'react';\\n\\nexport default function App() { return <h1>Hello World</h1>; }"
+      "content": "import React from 'react';\\n\\nexport default function App() { return <h1>Updated</h1>; }"
+    }
+  ]
+}
+\`\`\`
+
+**delete_files**: Elimina uno o più file
+\`\`\`json
+{
+  "action": "delete_files",
+  "files": [
+    {
+      "path": "old-file.js"
     }
   ]
 }
@@ -217,6 +282,14 @@ Se hai generato il codice o devi eliminare un file, rispondi con una delle segue
 \`\`\`${context.language || "text"}
 ${context.content || "(empty)"}
 \`\`\`
+
+---
+
+# RICORDA:
+- Restituisci SOLO JSON valido
+- Usa 'create_files' per creare nuovi file (come index.html, app.js, ecc.)
+- NON usare blocchi di testo prima del JSON
+- Il JSON deve essere completo e valido
 `;
 };
 
@@ -536,14 +609,16 @@ export const useAIStore = create((set, get) => ({
           messages: messagesForLLM,
           stream: false,
           responseSchema,
+          //maxTokens: 4096, // Aumenta il limite per risposte lunghe con codice
         });
 
         // Parsing della risposta
         const jsonString = extractJsonFromMarkdown(response.text);
 
         if (!jsonString) {
+          console.error("Raw AI response:", response.text);
           throw new Error(
-            `No valid JSON found in AI response. Raw response: ${response.text.substring(0, 200)}...`
+            `No valid JSON found in AI response. Response length: ${response.text?.length || 0} chars. Preview: ${response.text?.substring(0, 300)}...`
           );
         }
 
@@ -551,8 +626,9 @@ export const useAIStore = create((set, get) => ({
         try {
           parsedResponse = JSON.parse(jsonString);
         } catch (e) {
+          console.error("Failed to parse JSON:", jsonString.substring(0, 500));
           throw new Error(
-            `Failed to parse JSON from AI response: ${e.message}\nJSON: ${jsonString.substring(0, 200)}...`
+            `Failed to parse JSON from AI response: ${e.message}\nJSON preview: ${jsonString.substring(0, 300)}...`
           );
         }
 

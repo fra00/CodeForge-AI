@@ -56,7 +56,8 @@ const buildPath = (files, id) => {
  */
 const findNodeByPath = (files, path) => {
   // Normalizza il percorso: aggiunge lo slash iniziale se manca, a meno che non sia la root
-  const normalizedPath = path === "/" ? path : (path.startsWith("/") ? path : "/" + path);
+  const normalizedPath =
+    path === "/" ? path : path.startsWith("/") ? path : "/" + path;
 
   // La root è un caso speciale
   if (normalizedPath === "/") {
@@ -64,9 +65,7 @@ const findNodeByPath = (files, path) => {
   }
 
   // Cerca il nodo iterando su tutti i file
-  return Object.values(files).find(
-    (node) => node.path === normalizedPath
-  );
+  return Object.values(files).find((node) => node.path === normalizedPath);
 };
 
 // --- Store Definition ---
@@ -468,47 +467,76 @@ export const useFileStore = create((set, get) => ({
 
     for (const action of actions) {
       const { path, content } = action;
-      const existingNode = findNodeByPath(state.files, path);
+
+      // Normalizza il percorso
+      const normalizedPath = path.startsWith("/") ? path : "/" + path;
+      const existingNode = findNodeByPath(state.files, normalizedPath);
 
       try {
         if (actionType === "create_files") {
-          if (existingNode) {
-            results.push(`ERROR: File ${path} already exists.`);
+          // ✅ UPSERT: Crea o sovrascrive
+          if (existingNode && !existingNode.isFolder) {
+            // File esiste già, aggiorna il contenuto (sovrascrive)
+            updateFileContent(existingNode.id, content);
+            results.push(`✓ File ${normalizedPath} updated (already existed)`);
+          } else if (existingNode && existingNode.isFolder) {
+            // Errore: esiste una cartella con lo stesso nome
+            results.push(
+              `✗ ERROR: Cannot create file ${normalizedPath}, a folder with the same name exists.`
+            );
+          } else {
+            // File non esiste, crealo
+            const parts = normalizedPath.split("/").filter(Boolean);
+            const name = parts.pop();
+            const parentPath = parts.length > 0 ? "/" + parts.join("/") : "/";
+            const parentNode = findNodeByPath(state.files, parentPath);
+
+            if (!parentNode || !parentNode.isFolder) {
+              results.push(
+                `✗ ERROR: Parent folder for ${normalizedPath} not found or is not a folder.`
+              );
+              continue;
+            }
+
+            createFileOrFolder(parentNode.id, name, false, content);
+            results.push(`✓ File ${normalizedPath} created`);
+          }
+        } else if (actionType === "update_files") {
+          // ✅ UPDATE: Solo se esiste già
+          if (!existingNode) {
+            results.push(
+              `✗ ERROR: File ${normalizedPath} not found. Use 'create_files' to create it.`
+            );
             continue;
           }
-          // Estrai parentId e name dal path
-          const parts = path.split("/").filter(Boolean);
-          const name = parts.pop();
-          const parentPath = "/" + parts.join("/");
-          const parentNode = findNodeByPath(state.files, parentPath);
-
-          if (!parentNode || !parentNode.isFolder) {
+          if (existingNode.isFolder) {
             results.push(
-              `ERROR: Parent folder for ${path} not found or is not a folder.`
+              `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`
             );
             continue;
           }
 
-          createFileOrFolder(parentNode.id, name, false, content);
-          results.push(`SUCCESS: File ${path} created.`);
-        } else if (actionType === "update_files") {
-          if (!existingNode || existingNode.isFolder) {
-            results.push(`ERROR: File ${path} not found or is a folder.`);
-            continue;
-          }
           updateFileContent(existingNode.id, content);
-          results.push(`SUCCESS: File ${path} updated.`);
+          results.push(`✓ File ${normalizedPath} updated`);
         } else if (actionType === "delete_files") {
+          // ✅ DELETE: Elimina se esiste
           if (!existingNode) {
-            results.push(`ERROR: Node ${path} not found.`);
+            results.push(`✗ ERROR: Node ${normalizedPath} not found`);
             continue;
           }
-          // deleteNode è async, ma qui lo chiamiamo senza await per non bloccare il loop
+
+          // deleteNode è async, ma lo chiamiamo senza await per non bloccare il loop
           deleteNode(existingNode.id);
-          results.push(`SUCCESS: Node ${path} deleted.`);
+          results.push(`✓ Node ${normalizedPath} deleted`);
+        } else {
+          results.push(`✗ ERROR: Unknown action type: ${actionType}`);
         }
       } catch (e) {
-        results.push(`FATAL ERROR on ${path}: ${e.message}`);
+        results.push(`✗ FATAL ERROR on ${normalizedPath}: ${e.message}`);
+        console.error(
+          `Error applying action ${actionType} on ${normalizedPath}:`,
+          e
+        );
       }
     }
 
