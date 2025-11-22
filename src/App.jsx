@@ -20,6 +20,7 @@ import { SettingsPanel } from "./components/Settings/SettingsPanel";
  */
 function App() {
   const loadFiles = useFileStore((state) => state.loadFiles);
+  const downloadProjectZip = useFileStore((state) => state.downloadProjectZip);
   const isInitialized = useFileStore((state) => state.isInitialized);
   const {
     theme,
@@ -43,9 +44,9 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  // Funzioni di callback per l'Header (placeholder)
+  // Funzioni di callback per l'Header
   const handleNewFile = () => console.log("New File clicked");
-  const handleExport = () => console.log("Export clicked");
+  const handleExport = downloadProjectZip; // Collega la funzione dello store
   const handleOpenSettings = () => setActivePanel("settings");
 
   if (!isInitialized) {

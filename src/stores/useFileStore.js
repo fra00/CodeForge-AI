@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { initDB, getAll, put, remove } from "../utils/indexedDB";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 // --- Initial State & Constants ---
 const FILES_STORE_NAME = "files";
@@ -712,5 +714,39 @@ export const useFileStore = create((set, get) => ({
     };
 
     return buildTree(state.rootId);
+  },
+
+  /**
+   * Comprime l'intero file system virtuale in un file ZIP e lo scarica.
+   */
+  downloadProjectZip: async () => {
+    const state = get();
+    const zip = new JSZip();
+
+    // Filtra solo i file (non le cartelle) e ignora la root
+    const filesToZip = Object.values(state.files).filter(
+      (node) => !node.isFolder && node.id !== ROOT_ID
+    );
+
+    if (filesToZip.length === 0) {
+      console.warn("Nessun file da scaricare.");
+      return;
+    }
+
+    filesToZip.forEach((file) => {
+      // Rimuove lo slash iniziale dal percorso per la struttura ZIP
+      const zipPath = file.path.startsWith("/")
+        ? file.path.substring(1)
+        : file.path;
+      zip.file(zipPath, file.content || "");
+    });
+
+    try {
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, "codeforge-project.zip");
+    } catch (error) {
+      console.error("Errore durante la creazione o il download del file ZIP:", error);
+      alert("Errore durante la creazione o il download del file ZIP.");
+    }
   },
 }));
