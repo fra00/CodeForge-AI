@@ -6,11 +6,15 @@ import { useFileStore } from "./useFileStore";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
-const SYSTEM_PROMPT = `You are Kilo Code, a highly skilled software engineer AI assistant. Your primary function is to assist the user with code-related tasks, such as explaining code, refactoring, generating new code, or debugging.
+const SYSTEM_PROMPT = `You are Kilo Code, a highly skilled software engineer AI assistant. 
+Your primary function is to assist the user with code-related tasks, such as explaining code, refactoring, generating new code, 
+or debugging.
 
 When providing code, always use markdown code blocks.
 Be concise, professional, and extremely helpful.
-The user is working in a web-based code editor environment.`;
+The user is working in a web-based code editor environment.
+
+ALL reply are in JSON format as specified below. DO NOT include any text outside the JSON object.`;
 
 const initialMessages = [
   {
@@ -27,42 +31,85 @@ const initialMessages = [
 ];
 
 /**
+ * Rimuove tutto il testo prima della prima occorrenza di "```json".
+ * @param {string} text La stringa di input completa.
+ * @returns {string} La stringa pulita contenente solo il blocco JSON (e il testo successivo).
+ */
+const removePreJsonText = (text) => {
+  if (!text || typeof text !== "string") return "";
+
+  const startIndex = text.indexOf("```json");
+
+  // Se l'indicatore di inizio non viene trovato, restituisce la stringa originale.
+  if (startIndex === -1) {
+    return text.trim();
+  }
+
+  // Restituisce la sottostringa a partire da "```json" fino alla fine.
+  return text.substring(startIndex).trim();
+};
+
+/**
+ * Estrae il contenuto JSON da un blocco di codice ```json ... ```,
+ * cercando l'ULTIMA occorrenza del delimitatore di chiusura (```).
+ * Questo gestisce i casi in cui il JSON interno contiene stringhe con ```.
+ * * @param {string} text La stringa di input completa (contenente il preambolo).
+ * @returns {string|null} La stringa JSON pulita, o null.
+ */
+const removePostJsonText = (text) => {
+  if (!text || typeof text !== "string") return null;
+
+  const trimmed = text.trim();
+  const startDelimiter = "```json";
+  const endDelimiter = "```";
+
+  // 1. Trova l'inizio del blocco JSON
+  const startIndex = trimmed.indexOf(startDelimiter);
+
+  if (startIndex === -1) {
+    // Fallimento: non c'è un blocco ```json
+    return null;
+  }
+  // 2. Trova l'ULTIMA occorrenza del delimitatore di chiusura (```)
+  // Usiamo lastIndexOf sull'intera stringa.
+  // Dobbiamo assicurarci che questa ultima occorrenza sia DOPO l'inizio.
+  let contentEnd = trimmed.lastIndexOf(endDelimiter);
+
+  if (contentEnd <= 0) {
+    // Non è stata trovata una chiusura valida.
+    return null;
+  }
+
+  // Per estrarre il contenuto *tra* '```json' e '```', usiamo:
+  let rawJson = trimmed.substring(0, contentEnd + endDelimiter.length).trim();
+
+  return rawJson;
+};
+
+/**
  * Estrae il contenuto JSON da un blocco di codice Markdown.
  */
 const extractJsonFromMarkdown = (text) => {
   if (!text || typeof text !== "string") return null;
-  const trimmed = text.trim();
+  var trimmed = text.trim();
+  trimmed = removePreJsonText(trimmed);
+  trimmed = removePostJsonText(trimmed) || trimmed;
 
   // Strategia 1: Cerca blocco ```json ... ```
-  const jsonBlockMatch = trimmed.match(/```json\s*([\s\S]*?)\s*```/);
-  if (jsonBlockMatch && jsonBlockMatch[1]) {
-    return jsonBlockMatch[1].trim();
+  if (trimmed.startsWith("```json") && trimmed.endsWith("```")) {
+    return trimmed.slice(7, -3).trim();
   }
 
   // Strategia 2: Cerca blocco ``` ... ``` generico
-  const genericBlockMatch = trimmed.match(/```\s*([\s\S]*?)\s*```/);
-  if (genericBlockMatch && genericBlockMatch[1]) {
-    const content = genericBlockMatch[1].trim();
-    if (content.startsWith("{") || content.startsWith("[")) {
-      return content;
-    }
-  }
-
-  // Strategia 3: Trova parentesi graffe esterne
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    try {
-      const extracted = trimmed.substring(firstBrace, lastBrace + 1);
-      JSON.parse(extracted); // Test validità
-      return extracted;
-    } catch (e) {
-      // Non valido, continua
-    }
+  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    return trimmed.slice(3, -3).trim();
   }
 
   // Strategia 4: Testo grezzo
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
     return trimmed;
   }
 
@@ -77,18 +124,19 @@ const sanitizeJsonString = (jsonString) => {
   try {
     JSON.parse(jsonString);
     return jsonString;
-  } catch (e) {}
-
-  // Fix escape characters inside strings
-  let fixed = jsonString;
-  const stringPattern = /"([^"\\]*(\\.[^"\\]*)*)"/g;
-  fixed = fixed.replace(stringPattern, (match) => {
-    return match
-      .replace(/\\n/g, "\\n")
-      .replace(/\\t/g, "\\t")
-      .replace(/\\r/g, "\\r");
-  });
-  return fixed;
+  } catch (e) {
+    // Non è JSON standard. Tentativo 2: JSON5
+    try {
+      JSON5.parse(cojsonStringntent);
+      // Se JSON5 riesce, potresti restituire la stringa originale 'content'
+      // O, se hai bisogno di un JSON rigoroso per un'altra funzione,
+      // potresti convertirlo in standard JSON stringify
+      return JSON.stringify(JSON5.parse(jsonString));
+    } catch (e5) {
+      // Non è valido nemmeno per JSON5
+      return null;
+    }
+  }
 };
 
 /**
@@ -145,13 +193,13 @@ const normalizeResponse = (response) => {
     });
   }
 
-  // Mappa text -> response_text
+  // Mappa text -> text_response
   if (
     normalized.action === "text_response" &&
-    !normalized.response_text &&
+    !normalized.text_response &&
     normalized.text
   ) {
-    normalized.response_text = normalized.text;
+    normalized.text_response = normalized.text;
   }
   return normalized;
 };
@@ -170,20 +218,26 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
   let prompt = `${SYSTEM_PROMPT}
 
 ---
-
 # ⚠️ REGOLE CRITICHE PER I FILE (GOLDEN RULES)
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
 3. **JSON PURO**: Non scrivere testo introduttivo prima del JSON.
-
+4. OGNI RISPOSTA DEVE ESSERE UN OGGETTO **JSON VALIDO**.
 ---
 
-# Istruzioni per l'Output Strutturato
-
-Devi rispondere ESCLUSIVAMENTE con un oggetto JSON valido.
+# Istruzioni per l'Output Strutturato (JSON)
+ATTENZIONE: Ogni risposta in formato diverso da JSON è da considerare errata.
  
- ## 1. Risposta Solo Testuale
-Usa 'text_response' per spiegazioni o domande.
+## 1. Risposta Solo Testuale
+Usa 'text_response' per spiegazioni. 
+**NON mescolare spiegazioni con chiamate a tool o modifiche file.**
+
+\`\`\`json
+{
+"action":"text_response"
+"text_response" : "Spiegazione dettagliata..."
+}
+\`\`\`
 
 ## 2. Tool Call (Lettura File e Analisi)
 Usa 'tool_call' per interagire con il file system.
@@ -220,6 +274,33 @@ Ogni file DEVE avere "path".
 ## 4. Multi-File Task (Modifiche Complesse)
 Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti file in sequenza.
 
+1. Ottieni la lista completa dei file
+2. **ANALYZE**: Identifica tutti i file che hanno bisogno di essere modificati o creati.
+2. **ORDER**: Ordinali logicamente (dependencies first).
+3. **EXECUTE**:
+   - Usa 'start_multi_file' action.
+   - Definisci il 'plan' con una descrizione e un array di 'files' che sono i file da modificare o creare.  
+   - IMMEDIATELY genera il codice per FIRST file in the 'first_file' field.
+
+#### JSON Template for STARTING a task:
+\`\`\`json
+{
+  "action": "start_multi_file",
+  "plan": {
+    "description": "Short description of the goal",
+    "files_to_modify": ["src/utils/api.js", "src/App.jsx", "src/components/Login.jsx"]
+  },
+  "first_file": {
+    "action": "[create_files|update_files]", 
+    "file": { 
+      "path": "src/utils/api.js", 
+      "content": "export const newApi = ..." 
+    }
+  },
+  "message": "Starting refactor: Updating API utility first."
+}
+\`\`\`
+
 ---
 
 # Contesto del File Attivo
@@ -250,6 +331,29 @@ Il prossimo file che DEVI modificare è: "${nextFile}".
 
 La tua PROSSIMA risposta DEVE essere un JSON con action "continue_multi_file" per processare "${nextFile}".
 NON usare "text_response". NON fermarti. Procedi col codice per "${nextFile}".
+
+\`\`\`json
+{
+  "action": "continue_multi_file",
+  "next_file": {
+    "action": "[create_files|update_files]",
+    "file": { 
+      "path": "TARGET_FILE_PATH_HERE", 
+      "content": "FULL_UPDATED_CONTENT_HERE" 
+    }
+  },
+  "message": "{
+                \"action\":\"text_response\"
+                \"text_response\" : \"Now updating [File Name]...\"
+              }"  
+}
+\`\`\`
+
+## AUTO VERIFICA:
+- La tua risposta è SOLO un oggetto JSON valido?
+- Ogni file ha un "path" valido?
+
+se non hai rispettato una di queste regole, correggi la tua risposta
 `;
   }
 
@@ -285,7 +389,7 @@ const getResponseSchema = () => ({
         required: ["path"],
       },
     },
-    response_text: { type: "string" },
+    text_response: { type: "string" },
     message: { type: "string" },
     tool_call: {
       type: "object",
@@ -592,10 +696,23 @@ export const useAIStore = create((set, get) => ({
         }
 
         const jsonString = extractJsonFromMarkdown(rawText);
-        if (!jsonString) throw new Error("No valid JSON found in AI response.");
+        if (!jsonString) {
+          addMessage({
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "⚠️ NO JSON VALID:\n" + jsonString,
+          });
+          continue;
+        }
+        // if (!jsonString) throw new Error("No valid JSON found in AI response.");
 
-        const sanitizedJson = sanitizeJsonString(jsonString);
-        let parsedResponse = JSON.parse(sanitizedJson);
+        let parsedResponse = null;
+        try {
+          parsedResponse = JSON.parse(jsonString);
+        } catch (e) {
+          const sanitizedJson = sanitizeJsonString(jsonString);
+          parsedResponse = JSON.parse(sanitizedJson);
+        }
         parsedResponse = normalizeResponse(parsedResponse);
 
         if (!validateResponseStructure(parsedResponse)) {
@@ -605,7 +722,7 @@ export const useAIStore = create((set, get) => ({
         const {
           action,
           files,
-          response_text,
+          text_response,
           tool_call,
           plan,
           first_file,
@@ -809,7 +926,7 @@ export const useAIStore = create((set, get) => ({
         // === TEXT RESPONSE ===
         if (action === "text_response") {
           const finalContent =
-            response_text || parsedResponse.text || "✅ Done.";
+            text_response || parsedResponse.text || "✅ Done.";
           addMessage({
             id: Date.now().toString(),
             role: "assistant",
