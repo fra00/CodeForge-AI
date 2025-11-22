@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { getChatCompletion } from "../utils/aiService";
 import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
+import JSON5 from "json5";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
@@ -706,17 +707,19 @@ export const useAIStore = create((set, get) => ({
         }
         // if (!jsonString) throw new Error("No valid JSON found in AI response.");
 
-        let parsedResponse = null;
+        let jsonObject = null;
         try {
-          parsedResponse = JSON.parse(jsonString);
+          jsonObject = JSON.parse(jsonString);
         } catch (e) {
           const sanitizedJson = sanitizeJsonString(jsonString);
-          parsedResponse = JSON.parse(sanitizedJson);
+          jsonObject = JSON.parse(sanitizedJson);
         }
-        parsedResponse = normalizeResponse(parsedResponse);
+        jsonObject = normalizeResponse(jsonObject);
 
-        if (!validateResponseStructure(parsedResponse)) {
-          throw new Error(`Invalid action: ${parsedResponse.action}`);
+        console.log("Parsed AI Response JSON:", jsonObject);
+
+        if (!validateResponseStructure(jsonObject)) {
+          throw new Error(`Invalid action: ${jsonObject.action}`);
         }
 
         const {
@@ -728,7 +731,7 @@ export const useAIStore = create((set, get) => ({
           first_file,
           next_file,
           message,
-        } = parsedResponse;
+        } = jsonObject;
 
         // === START MULTI-FILE ===
         if (action === "start_multi_file" && plan && first_file) {
