@@ -11,8 +11,8 @@ export function Sidebar({ activePanel, onPanelChange }) {
   const navItems = [
     { id: "editor", icon: FileText, label: "Editor" },
     { id: "ai", icon: Bot, label: "AI Assistant" },
-    { id: "snippets", icon: BookOpen, label: "Snippets" },
-    { id: "templates", icon: LayoutGrid, label: "Templates" },
+    // { id: "snippets", icon: BookOpen, label: "Snippets" },
+    // { id: "templates", icon: LayoutGrid, label: "Templates" },
     { id: "settings", icon: Settings, label: "Settings" },
   ];
 

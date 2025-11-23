@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
-import { FilePlus, Download, Settings, Code } from 'lucide-react';
-import { useFileStore } from '../../stores/useFileStore';
+import React, { useMemo } from "react";
+import PropTypes from "prop-types";
+import { FilePlus, Download, Settings, Code } from "lucide-react";
+import { useFileStore } from "../../stores/useFileStore";
 
 /**
  * Componente Header per la barra superiore dell'applicazione.
@@ -9,8 +9,11 @@ import { useFileStore } from '../../stores/useFileStore';
  */
 export function Header({ onNewFile, onExport, onOpenSettings }) {
   const store = useFileStore();
-  const activeFile = useMemo(() => store.getActiveFile(), [store.activeFileId, store.files]);
-  const projectName = 'CodeForge AI'; // Nome fisso per l'MVP
+  const activeFile = useMemo(
+    () => store.getActiveFile(),
+    [store.activeFileId, store.files]
+  );
+  const projectName = "CodeForge AI"; // Nome fisso per l'MVP
 
   return (
     <header className="h-10 bg-editor-darker border-b border-editor-border flex items-center justify-between px-4 text-white">
@@ -27,13 +30,13 @@ export function Header({ onNewFile, onExport, onOpenSettings }) {
 
       {/* Pulsanti di Azione */}
       <div className="flex items-center space-x-3">
-        <button
+        {/* <button
           onClick={onNewFile}
           className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
           title="Nuovo File (Ctrl+N)"
         >
           <FilePlus size={18} />
-        </button>
+        </button> */}
         <button
           onClick={onExport}
           className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"

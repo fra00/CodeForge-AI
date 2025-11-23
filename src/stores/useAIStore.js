@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { getChatCompletion } from "../utils/aiService";
 import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
-import JSON5 from "json5";
+import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
@@ -32,115 +32,6 @@ const initialMessages = [
 ];
 
 /**
- * Rimuove tutto il testo prima della prima occorrenza di "```json".
- * @param {string} text La stringa di input completa.
- * @returns {string} La stringa pulita contenente solo il blocco JSON (e il testo successivo).
- */
-const removePreJsonText = (text) => {
-  if (!text || typeof text !== "string") return "";
-
-  const startIndex = text.indexOf("```json");
-
-  // Se l'indicatore di inizio non viene trovato, restituisce la stringa originale.
-  if (startIndex === -1) {
-    return text.trim();
-  }
-
-  // Restituisce la sottostringa a partire da "```json" fino alla fine.
-  return text.substring(startIndex).trim();
-};
-
-/**
- * Estrae il contenuto JSON da un blocco di codice ```json ... ```,
- * cercando l'ULTIMA occorrenza del delimitatore di chiusura (```).
- * Questo gestisce i casi in cui il JSON interno contiene stringhe con ```.
- * * @param {string} text La stringa di input completa (contenente il preambolo).
- * @returns {string|null} La stringa JSON pulita, o null.
- */
-const removePostJsonText = (text) => {
-  if (!text || typeof text !== "string") return null;
-
-  const trimmed = text.trim();
-  const startDelimiter = "```json";
-  const endDelimiter = "```";
-
-  // 1. Trova l'inizio del blocco JSON
-  const startIndex = trimmed.indexOf(startDelimiter);
-
-  if (startIndex === -1) {
-    // Fallimento: non c'è un blocco ```json
-    return null;
-  }
-  // 2. Trova l'ULTIMA occorrenza del delimitatore di chiusura (```)
-  // Usiamo lastIndexOf sull'intera stringa.
-  // Dobbiamo assicurarci che questa ultima occorrenza sia DOPO l'inizio.
-  let contentEnd = trimmed.lastIndexOf(endDelimiter);
-
-  if (contentEnd <= 0) {
-    // Non è stata trovata una chiusura valida.
-    return null;
-  }
-
-  // Per estrarre il contenuto *tra* '```json' e '```', usiamo:
-  let rawJson = trimmed.substring(0, contentEnd + endDelimiter.length).trim();
-
-  return rawJson;
-};
-
-/**
- * Estrae il contenuto JSON da un blocco di codice Markdown.
- */
-const extractJsonFromMarkdown = (text) => {
-  if (!text || typeof text !== "string") return null;
-  var trimmed = text.trim();
-  trimmed = removePreJsonText(trimmed);
-  trimmed = removePostJsonText(trimmed) || trimmed;
-
-  // Strategia 1: Cerca blocco ```json ... ```
-  if (trimmed.startsWith("```json") && trimmed.endsWith("```")) {
-    return trimmed.slice(7, -3).trim();
-  }
-
-  // Strategia 2: Cerca blocco ``` ... ``` generico
-  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
-    return trimmed.slice(3, -3).trim();
-  }
-
-  // Strategia 4: Testo grezzo
-  if (
-    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-    (trimmed.startsWith("[") && trimmed.endsWith("]"))
-  ) {
-    return trimmed;
-  }
-
-  return null;
-};
-
-/**
- * Sanitizza una stringa JSON
- */
-const sanitizeJsonString = (jsonString) => {
-  if (!jsonString) return jsonString;
-  try {
-    JSON.parse(jsonString);
-    return jsonString;
-  } catch (e) {
-    // Non è JSON standard. Tentativo 2: JSON5
-    try {
-      JSON5.parse(cojsonStringntent);
-      // Se JSON5 riesce, potresti restituire la stringa originale 'content'
-      // O, se hai bisogno di un JSON rigoroso per un'altra funzione,
-      // potresti convertirlo in standard JSON stringify
-      return JSON.stringify(JSON5.parse(jsonString));
-    } catch (e5) {
-      // Non è valido nemmeno per JSON5
-      return null;
-    }
-  }
-};
-
-/**
  * Valida la struttura della risposta
  */
 const validateResponseStructure = (response) => {
@@ -155,6 +46,15 @@ const validateResponseStructure = (response) => {
     "continue_multi_file",
   ];
   return validActions.includes(response.action);
+};
+
+const normalizePath = (path) => {
+  if (!path) return "";
+  // Rimuove ./ iniziale e normalizza gli slash
+  return path
+    .replace(/^[./]+/, "")
+    .replace(/\\/g, "/")
+    .trim();
 };
 
 /**
@@ -217,21 +117,43 @@ const createNewChat = (id) => ({
  */
 const buildSystemPrompt = (context, multiFileTaskState) => {
   let prompt = `${SYSTEM_PROMPT}
+---
+### 🧠 DECISION PROTOCOL (Follow strictly)
 
+1. **ANALYSIS PHASE**
+   - Ask: "Do I have all the file contents required to answer/code?"
+   - IF NO -> Use tool 'read_file' (use 'paths' array for multiple files).
+   - IF YES -> Proceed to Execution.
+
+2. **EXECUTION PHASE**
+   - Ask: "Does this task involve modifying ONE file or MULTIPLE files?"
+   
+   - **CASE A: Single File**
+     Action: Use 'update_files' (or create/delete).
+     Result: Task done immediately.
+
+   - **CASE B: Multiple Files (Refactoring/Global Changes)**
+     Action: Use 'start_multi_file'.
+     Requirement: define 'plan' AND generate code for the 'first_file'.
+     Note: The system will automatically prompt you for the next files.
+
+3. **TEXT RESPONSE**
+   - Only use 'text_response' if no code changes or file reads are needed.
 ---
 # ⚠️ REGOLE CRITICHE PER I FILE (GOLDEN RULES)
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
-3. **JSON PURO**: Non scrivere testo introduttivo prima del JSON.
-4. OGNI RISPOSTA DEVE ESSERE UN OGGETTO **JSON VALIDO**.
+3. **JSON PURO**: Scrivi testo o spiegazioni **SOLO** dentro il JSON object.
+4. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
+5. ogni risposta deve avere una sola **ACTION** valida.
 ---
 
 # Istruzioni per l'Output Strutturato (JSON)
-ATTENZIONE: Ogni risposta in formato diverso da JSON è da considerare errata.
+⚠️ ATTENZIONE: Ogni risposta in formato diverso da JSON è da considerare errata.
  
 ## 1. Risposta Solo Testuale
-Usa 'text_response' per spiegazioni. 
-**NON mescolare spiegazioni con chiamate a tool o modifiche file.**
+Usa 'text_response' per dare risposte solo testuali o esplicative.
+**NON mescolare text_response con tool_call.**
 
 \`\`\`json
 {
@@ -271,6 +193,31 @@ Esempio Batch Reading:
 ## 3. Azioni sul File System (Scrittura)
 Usa 'create_files', 'update_files', 'delete_files' per operazioni immediate.
 Ogni file DEVE avere "path".
+### A. Create / Update (Scrittura)
+Richiede "content". Se aggiorni un file, fornisci il contenuto COMPLETO.
+\`\`\`json
+{
+  "action": "update_files",
+  "files": [
+    {
+      "path": "src/components/Header.jsx",
+      "content": "export default function Header() { return <div>Logo</div>; }"
+    }
+  ]
+}
+\`\`\`
+*(Nota: puoi usare "create_files" con la stessa identica struttura)*
+
+### B. Delete (Cancellazione)
+Richiede solo "path".
+\`\`\`json
+{
+  "action": "delete_files",
+  "files": [
+    { "path": "src/unused/legacy.js" }
+  ]
+}
+\`\`\`
 
 ## 4. Multi-File Task (Modifiche Complesse)
 Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti file in sequenza.
@@ -602,8 +549,20 @@ export const useAIStore = create((set, get) => ({
       return;
     }
 
-    if (!context)
-      context = { language: "text", currentFile: "none", content: "" };
+    if (!context || !context.currentFile || context.currentFile === "none") {
+      // Fallback: prova a prendere il file attivo dallo store se disponibile
+      // Nota: Adatta 'activeFilePath' al nome esatto della proprietà nel tuo fileStore se diverso
+      const activePath = fileStore.activeFilePath;
+      const activeFile = activePath
+        ? fileStore.files.find((f) => f.path === activePath)
+        : null;
+
+      context = {
+        language: activeFile?.language || "text",
+        currentFile: activeFile?.path || "none",
+        content: activeFile?.content || "",
+      };
+    }
 
     let toolCallCount = 0;
 
@@ -637,7 +596,26 @@ export const useAIStore = create((set, get) => ({
       set({ isStreaming: true, error: null });
       const responseSchema = getResponseSchema();
 
+      const startFilePath = context.currentFile;
+
       while (toolCallCount < maxToolCalls) {
+        // 🛑 LOGICA SEMPLIFICATA
+        if (startFilePath && startFilePath !== "none") {
+          // Cerchiamo il file originale nello store aggiornato
+          const freshFile = Array(useFileStore.getState().files).find(
+            (f) => normalizePath(f.path) === normalizePath(startFilePath)
+          );
+
+          if (freshFile) {
+            // CASO 1: Il file esiste ancora (è stato solo modificato) -> Aggiorna contenuto
+            context.content = freshFile.content;
+          } else {
+            // CASO 2: Il file è sparito (rinominato o cancellato)
+            context.content =
+              "(File no longer exists at this path - possibly renamed or deleted)";
+          }
+        }
+
         const currentChat = get().conversations.find(
           (c) => c.id === currentChatId
         );
@@ -696,12 +674,12 @@ export const useAIStore = create((set, get) => ({
           rawText = JSON.stringify(response);
         }
 
-        const jsonString = extractJsonFromMarkdown(rawText);
+        const jsonString = extractAndSanitizeJson(rawText);
         if (!jsonString) {
           addMessage({
             id: Date.now().toString(),
             role: "assistant",
-            content: "⚠️ NO JSON VALID:\n" + jsonString,
+            content: "⚠️ NO JSON VALID:\n" + rawText,
           });
           continue;
         }
@@ -711,8 +689,7 @@ export const useAIStore = create((set, get) => ({
         try {
           jsonObject = JSON.parse(jsonString);
         } catch (e) {
-          const sanitizedJson = sanitizeJsonString(jsonString);
-          jsonObject = JSON.parse(sanitizedJson);
+          console.error("JSON Parse Error:", e, "Raw JSON String:", jsonString);
         }
         jsonObject = normalizeResponse(jsonObject);
 
@@ -773,7 +750,7 @@ export const useAIStore = create((set, get) => ({
                 ...state.multiFileTaskState,
                 completedFiles: [currentPath],
                 remainingFiles: state.multiFileTaskState.remainingFiles.filter(
-                  (f) => f !== currentPath
+                  (f) => normalizePath(f) !== normalizePath(currentPath)
                 ),
               },
             }));
@@ -838,7 +815,7 @@ export const useAIStore = create((set, get) => ({
                   currentPath,
                 ],
                 remainingFiles: state.multiFileTaskState.remainingFiles.filter(
-                  (f) => f !== currentPath
+                  (f) => normalizePath(f) !== normalizePath(currentPath)
                 ),
               },
             }));
@@ -928,8 +905,7 @@ export const useAIStore = create((set, get) => ({
 
         // === TEXT RESPONSE ===
         if (action === "text_response") {
-          const finalContent =
-            text_response || parsedResponse.text || "✅ Done.";
+          const finalContent = text_response || jsonObject.text || "✅ Done.";
           addMessage({
             id: Date.now().toString(),
             role: "assistant",
