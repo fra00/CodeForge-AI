@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useFileStore } from '../stores/useFileStore';
+import { useEffect, useRef, useState } from "react";
+import { useFileStore } from "../stores/useFileStore";
 
 const AUTOSAVE_INTERVAL = 2000; // Salva ogni 2 secondi
 
@@ -8,18 +8,16 @@ const AUTOSAVE_INTERVAL = 2000; // Salva ogni 2 secondi
  * Salva automaticamente i file "dirty" (modificati) su IndexedDB.
  */
 export function useAutoSave() {
-  const files = useFileStore(state => state.files);
-  const saveFile = useFileStore(state => state.saveFile);
+  const files = useFileStore((state) => state.files);
+  const saveFile = useFileStore((state) => state.saveFile);
   const [isSaving, setIsSaving] = useState(false);
   const timeoutRef = useRef(null);
 
   // Effetto per l'auto-salvataggio periodico
   useEffect(() => {
-    const dirtyFileIds = Object.values(files)
-      .filter(file => file.isDirty && !file.isFolder)
-      .map(file => file.id);
+    const dirtyFiles = Object.values(files).filter((file) => file.isDirty);
 
-    if (dirtyFileIds.length > 0) {
+    if (dirtyFiles.length > 0) {
       // Se c'è un timer attivo, lo cancella per evitare salvataggi multipli
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -28,13 +26,23 @@ export function useAutoSave() {
       // Imposta un nuovo timer per il salvataggio
       timeoutRef.current = setTimeout(async () => {
         setIsSaving(true);
-        console.log(`Auto-saving ${dirtyFileIds.length} file(s)...`);
-        
-        // Salva tutti i file modificati in parallelo
-        await Promise.all(dirtyFileIds.map(id => saveFile(id)));
-        
+        console.log(`Auto-saving ${dirtyFiles.length} file(s)...`);
+
+        // Ordina i file per path per salvare i genitori prima dei figli
+        const sortedDirtyFiles = dirtyFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+        // Esegui i salvataggi in sequenza per evitare race condition
+        for (const fileToSave of sortedDirtyFiles) {
+          // Ricontrolla se il file è ancora "dirty" perché un salvataggio precedente
+          // potrebbe averlo già aggiornato (es. un genitore che aggiorna un figlio)
+          const currentFileState = useFileStore.getState().files[fileToSave.id];
+          if (currentFileState && currentFileState.isDirty) {
+            await saveFile(fileToSave.id);
+          }
+        }
+
         setIsSaving(false);
-        console.log('Auto-save complete.');
+        console.log("Auto-save complete.");
       }, AUTOSAVE_INTERVAL);
     }
 
@@ -50,25 +58,27 @@ export function useAutoSave() {
   useEffect(() => {
     const handleBeforeUnload = (event) => {
       const dirtyFileIds = Object.values(files)
-        .filter(file => file.isDirty && !file.isFolder)
-        .map(file => file.id);
+        .filter((file) => file.isDirty && !file.isFolder)
+        .map((file) => file.id);
 
       if (dirtyFileIds.length > 0) {
         // Non possiamo usare async/await qui, ma possiamo avviare il salvataggio
         // e mostrare un messaggio di avviso (anche se i browser moderni lo ignorano)
-        console.warn('Unsaved changes detected. Attempting to save before closing...');
-        dirtyFileIds.forEach(id => saveFile(id));
-        
+        console.warn(
+          "Unsaved changes detected. Attempting to save before closing..."
+        );
+        dirtyFileIds.forEach((id) => saveFile(id));
+
         // Messaggio di avviso (spesso ignorato)
         event.preventDefault();
-        event.returnValue = '';
+        event.returnValue = "";
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [files, saveFile]);
 

@@ -45,7 +45,9 @@ export function FileExplorer() {
     useFileStore.getState().loadFiles();
   };
 
-  const handleContextMenuAction = (action, targetId) => {
+  const handleContextMenuAction = (action, targetId, e) => {
+    e.stopPropagation();
+    e.preventDefault();
     handleCloseContextMenu();
     const node = store.files[targetId];
 

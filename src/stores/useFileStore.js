@@ -24,6 +24,7 @@ const INITIAL_STATE = {
   openFileIds: [],
   activeFileId: null,
   nextTempId: 1, // For new files not yet in DB
+  savingFileIds: new Set(), // Per tracciare i file in salvataggio
 };
 
 // --- Helper Functions ---
@@ -173,10 +174,21 @@ export const useFileStore = create((set, get) => ({
    * @param {string} id - L'ID del file da salvare.
    */
   saveFile: async (id) => {
+    // LOCK: Se il file è già in salvataggio, esci.
+    if (get().savingFileIds.has(id)) {
+      console.log(`Save for file ${id} is already in progress. Skipping.`);
+      return;
+    }
+
     const file = get().files[id];
-    if (!file || file.isFolder || !file.isDirty) return;
+    if (!file || !file.isDirty) return;
 
     try {
+      // LOCK: Aggiungi l'ID al set dei file in salvataggio
+      set((state) => ({
+        savingFileIds: new Set(state.savingFileIds).add(id),
+      }));
+
       // Prepara l'oggetto per il DB (rimuovi le proprietà non persistenti)
       const dbFile = {
         ...file,
@@ -198,7 +210,8 @@ export const useFileStore = create((set, get) => ({
           const oldId = id;
           const newFiles = { ...state.files };
 
-          // 1. Rimuovi il vecchio nodo
+          // 1. Rimuovi il vecchio nodo, ma conservane una copia per accedere ai figli
+          const oldNode = newFiles[oldId];
           delete newFiles[oldId];
 
           // 2. Aggiungi il nuovo nodo con l'ID DB
@@ -208,7 +221,8 @@ export const useFileStore = create((set, get) => ({
             isDirty: false,
             isNew: false,
           };
-          // 3. Aggiorna il parent
+            
+          // 3. Aggiorna il parent del nodo appena salvato
           const parent = newFiles[file.parentId];
           if (parent) {
             parent.children = parent.children.map((childId) =>
@@ -222,6 +236,16 @@ export const useFileStore = create((set, get) => ({
           );
           const newActiveFileId =
             state.activeFileId === oldId ? newIdStr : state.activeFileId;
+
+          // 5. CORREZIONE: Se il nodo era una cartella, aggiorna il parentId dei suoi figli
+          if (oldNode && oldNode.isFolder && oldNode.children) {
+            oldNode.children.forEach(childId => {
+              const childNode = newFiles[childId];
+              if (childNode) {
+                newFiles[childId] = { ...childNode, parentId: newIdStr };
+              }
+            });
+          }
 
           return {
             files: newFiles,
@@ -246,6 +270,13 @@ export const useFileStore = create((set, get) => ({
     } catch (error) {
       console.error(`Failed to save file ${id} to IndexedDB:`, error);
       return null;
+    } finally {
+      // UNLOCK: Rimuovi l'ID dal set dei file in salvataggio
+      set((state) => {
+        const newSavingFileIds = new Set(state.savingFileIds);
+        newSavingFileIds.delete(id);
+        return { savingFileIds: newSavingFileIds };
+      });
     }
   },
 
@@ -259,18 +290,20 @@ export const useFileStore = create((set, get) => ({
     const parent = state.files[parentId];
     if (!parent || !parent.isFolder) {
       console.error("Invalid parent ID or not a folder.");
-      return;
+      return null;
     }
 
     // Verifica se esiste già un nodo con lo stesso nome
     const existingChild = parent.children.find(
-      (childId) => state.files[childId].name === name
+      (childId) => state.files[childId]?.name === name
     );
     if (existingChild) {
       console.warn(
         `A file or folder named "${name}" already exists in this location.`
       );
-      return;
+      // Restituisce il nodo esistente se è una cartella, per permettere la creazione ricorsiva
+      const existingNode = state.files[existingChild];
+      return existingNode.isFolder ? existingNode : null;
     }
 
     const newId = generateTempId(state.nextTempId);
@@ -278,9 +311,7 @@ export const useFileStore = create((set, get) => ({
       id: newId,
       name,
       path:
-        buildPath(state.files, parentId) +
-        (parentId !== ROOT_ID ? "/" : "") +
-        name,
+        (parent.path === "/" ? "" : parent.path) + "/" + name,
       isFolder,
       content: isFolder ? "" : content,
       language: isFolder ? "" : "text", // Lingua di default, verrà aggiornata da languageDetector
@@ -300,7 +331,6 @@ export const useFileStore = create((set, get) => ({
         },
       };
 
-      // Aggiorna il contatore nextTempId e lo stato dei file in un'unica operazione
       return {
         files: newFiles,
         nextTempId: state.nextTempId + 1,
@@ -311,6 +341,8 @@ export const useFileStore = create((set, get) => ({
     if (!isFolder) {
       get().openFile(newId);
     }
+    
+    return newNode;
   },
 
   /**
@@ -487,20 +519,39 @@ export const useFileStore = create((set, get) => ({
               `✗ ERROR: Cannot create file ${normalizedPath}, a folder with the same name exists.`
             );
           } else {
-            // File non esiste, crealo
+            // File non esiste, crealo (e le cartelle necessarie)
             const parts = normalizedPath.split("/").filter(Boolean);
             const name = parts.pop();
-            const parentPath = parts.length > 0 ? "/" + parts.join("/") : "/";
-            const parentNode = findNodeByPath(state.files, parentPath);
+            
+            let parentId = state.rootId;
 
-            if (!parentNode || !parentNode.isFolder) {
-              results.push(
-                `✗ ERROR: Parent folder for ${normalizedPath} not found or is not a folder.`
+            // Crea le cartelle ricorsivamente
+            for (const part of parts) {
+              // A ogni iterazione, prendi lo stato più recente dei file
+              const currentFiles = useFileStore.getState().files;
+              const parentNode = currentFiles[parentId];
+              
+              const childId = parentNode.children.find(
+                (id) => currentFiles[id]?.name === part
               );
-              continue;
+              const childNode = childId ? currentFiles[childId] : null;
+
+              if (childNode && childNode.isFolder) {
+                parentId = childNode.id;
+              } else if (childNode && !childNode.isFolder) {
+                throw new Error(`A file named "${part}" exists where a folder was expected.`);
+              } else {
+                const newFolderNode = createFileOrFolder(parentId, part, true);
+                if (!newFolderNode) {
+                  throw new Error(`Failed to create intermediate directory: "${part}"`);
+                }
+                parentId = newFolderNode.id;
+                results.push(`✓ Folder /${part} created`);
+              }
             }
 
-            createFileOrFolder(parentNode.id, name, false, content);
+            // Ora crea il file
+            createFileOrFolder(parentId, name, false, content);
             results.push(`✓ File ${normalizedPath} created`);
           }
         } else if (actionType === "update_files") {
@@ -745,7 +796,10 @@ export const useFileStore = create((set, get) => ({
       const content = await zip.generateAsync({ type: "blob" });
       saveAs(content, "codeforge-project.zip");
     } catch (error) {
-      console.error("Errore durante la creazione o il download del file ZIP:", error);
+      console.error(
+        "Errore durante la creazione o il download del file ZIP:",
+        error
+      );
       alert("Errore durante la creazione o il download del file ZIP.");
     }
   },

@@ -1,12 +1,18 @@
-import React, { useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
-import PropTypes from 'prop-types';
-import { FilePlus, FolderPlus, Edit, Trash, Copy, X } from 'lucide-react';
+import React, { useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
+import PropTypes from "prop-types";
+import { FilePlus, FolderPlus, Edit, Trash, Copy, X } from "lucide-react";
 
 /**
  * Componente per il singolo elemento del menu contestuale.
  */
-function ContextMenuItem({ icon: Icon, label, action, shortcut, disabled = false }) {
+function ContextMenuItem({
+  icon: Icon,
+  label,
+  action,
+  shortcut,
+  disabled = false,
+}) {
   return (
     <button
       onClick={action}
@@ -17,7 +23,9 @@ function ContextMenuItem({ icon: Icon, label, action, shortcut, disabled = false
         <Icon size={16} className="mr-2" />
         <span>{label}</span>
       </div>
-      {shortcut && <span className="text-xs text-editor-border">{shortcut}</span>}
+      {shortcut && (
+        <span className="text-xs text-editor-border">{shortcut}</span>
+      )}
     </button>
   );
 }
@@ -33,20 +41,53 @@ ContextMenuItem.propTypes = {
 /**
  * Componente del menu contestuale che utilizza un Portal per il rendering.
  */
-export function ContextMenu({ x, y, targetId, onClose, onAction, files, rootId }) {
+export function ContextMenu({
+  x,
+  y,
+  targetId,
+  onClose,
+  onAction,
+  files,
+  rootId,
+}) {
   const menuRef = useRef(null);
 
   const isRoot = targetId === rootId;
 
   // Definisco le azioni del menu (placeholder)
   const menuItems = [
-    { label: 'Nuovo File', icon: FilePlus, action: () => onAction('newFile', targetId), shortcut: 'Ctrl+N' },
-    { label: 'Nuova Cartella', icon: FolderPlus, action: () => onAction('newFolder', targetId) },
-    { type: 'separator' },
-    { label: 'Rinomina', icon: Edit, action: () => onAction('rename', targetId), shortcut: 'F2', disabled: isRoot },
-    { label: 'Elimina', icon: Trash, action: () => onAction('delete', targetId), shortcut: 'Del', disabled: isRoot },
-    { type: 'separator' },
-    { label: 'Copia Percorso', icon: Copy, action: () => onAction('copyPath', targetId) },
+    {
+      label: "Nuovo File",
+      icon: FilePlus,
+      action: (e) => onAction("newFile", targetId, e),
+      shortcut: "Ctrl+N",
+    },
+    {
+      label: "Nuova Cartella",
+      icon: FolderPlus,
+      action: (e) => onAction("newFolder", targetId, e),
+    },
+    { type: "separator" },
+    {
+      label: "Rinomina",
+      icon: Edit,
+      action: (e) => onAction("rename", targetId, e),
+      shortcut: "F2",
+      disabled: isRoot,
+    },
+    {
+      label: "Elimina",
+      icon: Trash,
+      action: (e) => onAction("delete", targetId, e),
+      shortcut: "Del",
+      disabled: isRoot,
+    },
+    { type: "separator" },
+    {
+      label: "Copia Percorso",
+      icon: Copy,
+      action: (e) => onAction("copyPath", targetId, e),
+    },
   ];
 
   // Calcola la posizione per evitare che il menu esca dallo schermo
@@ -80,10 +121,21 @@ export function ContextMenu({ x, y, targetId, onClose, onAction, files, rootId }
       onClick={onClose} // Chiude il menu al click su un elemento
     >
       {menuItems.map((item, index) => {
-        if (item.type === 'separator') {
-          return <div key={`sep-${index}`} className="border-t border-editor-border my-1 mx-2" />;
+        if (item.type === "separator") {
+          return (
+            <div
+              key={`sep-${index}`}
+              className="border-t border-editor-border my-1 mx-2"
+            />
+          );
         }
-        return <ContextMenuItem key={item.label} {...item} disabled={item.disabled} />;
+        return (
+          <ContextMenuItem
+            key={item.label}
+            {...item}
+            disabled={item.disabled}
+          />
+        );
       })}
     </div>,
     document.body // Renderizza nel body
