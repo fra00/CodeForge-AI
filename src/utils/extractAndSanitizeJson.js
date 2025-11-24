@@ -35,6 +35,11 @@ export const extractAndSanitizeJson = (text) => {
     }
   }
 
+  // var obj = JSON.parse(rawJsonContent); // Verifica che sia valido JSON
+  // if (obj) {
+  //   rawJsonContent = obj.text || rawJsonContent;
+  // }
+
   // --- Strategia 2: Fallback Blocco Markdown (Per casi eccezionali) ---
   // Usato solo se le parentesi graffe/quadre non sono state trovate in S1.
   // Questo è un fallback per input mal formattati che sono *solo* un blocco di codice.

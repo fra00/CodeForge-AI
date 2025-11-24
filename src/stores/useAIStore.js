@@ -145,7 +145,9 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
 2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
 3. **JSON PURO**: Scrivi testo o spiegazioni **SOLO** dentro il JSON object.
 4. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
-5. ogni risposta deve avere una sola **ACTION** valida.
+5. OGNI RISPOSTA DEVE AVERE UNA SOLA **ACTION**.
+6. **ESCAPE DELLE STRINGHE JSON**: All'interno di qualsiasi valore "stringa" nel JSON (come in "content"), i caratteri speciali DEVONO essere sempre escapati."}
+7. EVITA {\n"action":"[stringa]"} , usa invece {"action":"[stringa]"} 
 ---
 
 # Istruzioni per l'Output Strutturato (JSON)
