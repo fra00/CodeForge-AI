@@ -7,7 +7,7 @@ import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
-const SYSTEM_PROMPT = `You are Kilo Code, a highly skilled software engineer AI assistant. 
+const SYSTEM_PROMPT = `You are Code Assistant, a highly skilled software engineer AI assistant. 
 Your primary function is to assist the user with code-related tasks, such as explaining code, refactoring, generating new code, 
 or debugging.
 
@@ -27,7 +27,7 @@ const initialMessages = [
     id: "initial-assistant",
     role: "assistant",
     content:
-      "Hello! I am Kilo Code, your AI software engineer assistant. How can I help you with your code today?",
+      "Hello! I am Code Assistant, your AI software engineer assistant. How can I help you with your code today?",
   },
 ];
 
