@@ -1,17 +1,4 @@
-# React + JavaScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
----
+# AI-Powered Web IDE
 
 ## 🤖 Guida per lo Sviluppo Assistito da AI
 
@@ -70,44 +57,70 @@ Una volta superato il test, puoi iniziare a sviluppare.
 
 ---
 
-# CodeForge AI
+Questo progetto è un ambiente di sviluppo web (IDE) sperimentale che integra un assistente AI avanzato. A differenza dei tradizionali chatbot, l'AI in questo ambiente può comprendere le richieste, analizzare il codice esistente e **agire direttamente sul file system del progetto** per creare, modificare ed eliminare file.
 
-Un IDE intelligente completamente client-side con supporto AI integrato.
+L'assistente è progettato per funzionare con diversi modelli di linguaggio di grandi dimensioni (LLM) come **Gemini** e **Claude**, rendendolo flessibile e potente.
 
-## Features
+## ✨ Caratteristiche Principali
 
-- 🤖 AI Code Generation (Anthropic Claude)
-- 📁 Virtual File System con persistenza (IndexedDB)
-- 💻 Monaco Editor (VS Code)
-- 📚 Snippet Library
-- 🎨 Project Templates
-- 👁️ Live Preview HTML/CSS/JS
-- 💾 Export/Import progetti (ZIP)
-- 🎯 Multi-language support (JS, C++, Kotlin, Arduino)
+- **🤖 Agente AI Attivo**: L'AI non si limita a rispondere. Può eseguire azioni concrete come:
+  - `create_files`: Creare nuovi file con il contenuto specificato.
+  - `update_files`: Modificare file esistenti, fornendo il contenuto completo aggiornato.
+  - `delete_files`: Rimuovere file dal progetto.
+- **🧠 Analisi del Contesto**: L'AI può richiedere di leggere il contenuto di uno o più file (`read_file`) per raccogliere il contesto necessario prima di formulare un piano d'azione.
+- **⚙️ Refactoring Multi-File**: Gestisce attività complesse che coinvolgono più file (es. refactoring di un'API) attraverso un protocollo `start_multi_file` e `continue_multi_file`, garantendo che il task venga completato in modo sequenziale e controllato.
+- **🔌 Provider AI Configurabile**: Supporta nativamente diversi provider di AI. L'utente può scegliere il modello e fornire la propria chiave API.
+- **💬 Chat Persistente**: Le conversazioni con l'AI vengono salvate localmente utilizzando IndexedDB, permettendo di riprendere il lavoro in sessioni successive.
+- **🛡️ Parsing JSON Robusto**: Utilizza un sistema di sanitizzazione a più stadi (`extractAndSanitizeJson`) che impiega anche `JSON5` per interpretare correttamente le risposte dell'LLM, anche se non sono in formato JSON perfettamente standard.
 
-## Tech Stack
+## 🚀 Architettura
 
-- React 18
-- Vite
-- Zustand (State Management)
-- Monaco Editor
-- IndexedDB (idb)
-- Anthropic API
-- TailwindCSS
+Il cuore del progetto è un sistema **Agente-Strumento** dove l'AI agisce come un "agente" che decide quale "strumento" utilizzare per portare a termine una richiesta.
 
-## Getting Started
+1.  **Input Utente**: L'utente invia una richiesta tramite l'interfaccia di chat.
+2.  **Costruzione del Prompt Dinamico**: `useAIStore` costruisce un prompt di sistema dettagliato che include le regole del protocollo, le specifiche JSON e il contesto del file attivo.
+3.  **Ciclo di Interazione AI**: L'AI analizza la richiesta. Se ha bisogno di più contesto, usa lo strumento `read_file`. Una volta pronta, genera un JSON con un'azione (`update_files`, `start_multi_file`, etc.).
+4.  **Esecuzione dell'Azione**: La risposta JSON viene sanitizzata e validata. `useFileStore` esegue le operazioni richieste sul file system virtuale.
+5.  **Feedback all'Utente**: Il risultato dell'operazione viene mostrato nell'interfaccia di chat.
 
-```bash
-npm install
-npm run dev
-```
+## 🛠️ Stack Tecnologico
 
-## Build
+- **Frontend**: React
+- **State Management**: Zustand
+- **Storage Locale**: IndexedDB
+- **Interazione AI**: Chiamate API dirette a provider come Google (Gemini) o Anthropic (Claude).
+- **Parsing Avanzato**: JSON5
 
-```bash
-npm run build
-```
+## 📦 Installazione e Avvio
 
-## License
+1.  **Clona il repository:**
 
-MIT
+    ```bash
+    git clone https://github.com/tuo-utente/tuo-repo.git
+    cd tuo-repo
+    ```
+
+2.  **Installa le dipendenze:**
+
+    ```bash
+    npm install
+    ```
+
+3.  **Configura le chiavi API:**
+    Il progetto richiede una chiave API per il provider AI che desideri utilizzare. Configura le variabili d'ambiente o inserisci la chiave direttamente nell'interfaccia utente dell'applicazione.
+
+4.  **Avvia il server di sviluppo:**
+    ```bash
+    npm run dev
+    ```
+
+## 🗺️ Roadmap Futura
+
+- **Ottimizzazione dei Token**: Implementare una strategia di riassunto del contesto per ridurre l'uso dei token.
+- **Miglioramenti UI/UX**: Aggiungere indicatori di caricamento, sezioni ridimensionabili e controlli per i messaggi.
+- **Importazione Progetto**: Aggiungere la funzionalità per importare un intero progetto da un file `.zip`.
+- **Supporto Multi-Linguaggio**: Specializzare i prompt per diversi linguaggi di programmazione.
+
+## 🤝 Contributi
+
+I contributi sono benvenuti! Se hai idee per nuove funzionalità o miglioramenti, sentiti libero di aprire una issue o una pull request.
