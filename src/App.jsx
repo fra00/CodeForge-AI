@@ -21,6 +21,9 @@ import { SettingsPanel } from "./components/Settings/SettingsPanel";
 function App() {
   const loadFiles = useFileStore((state) => state.loadFiles);
   const downloadProjectZip = useFileStore((state) => state.downloadProjectZip);
+  const importProjectFromZip = useFileStore(
+    (state) => state.importProjectFromZip
+  );
   const isInitialized = useFileStore((state) => state.isInitialized);
   const {
     theme,
@@ -45,9 +48,22 @@ function App() {
   }, [theme]);
 
   // Funzioni di callback per l'Header
-  const handleNewFile = () => console.log("New File clicked");
   const handleExport = downloadProjectZip; // Collega la funzione dello store
   const handleOpenSettings = () => setActivePanel("settings");
+
+  // Funzione per gestire l'importazione
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      importProjectFromZip(file);
+    }
+    // Resetta l'input per permettere di caricare lo stesso file di nuovo
+    event.target.value = null;
+  };
+
+  // Funzione per triggerare il click sull'input file nascosto
+  const triggerImport = () =>
+    document.getElementById("import-zip-input")?.click();
 
   if (!isInitialized) {
     return (
@@ -88,11 +104,19 @@ function App() {
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
       {/* Header */}
       <Header
-        onNewFile={handleNewFile}
         onExport={handleExport}
+        onImport={triggerImport} // Passa la nuova funzione
         onOpenSettings={handleOpenSettings}
       />
 
+      {/* Input nascosto per l'upload del file ZIP */}
+      <input
+        type="file"
+        id="import-zip-input"
+        className="hidden"
+        accept=".zip"
+        onChange={handleImport}
+      />
       {/* Main Content Area */}
       <main className="flex flex-grow overflow-hidden">
         {/* Sidebar Nav */}

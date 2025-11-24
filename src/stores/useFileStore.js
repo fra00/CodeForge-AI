@@ -82,6 +82,23 @@ export const useFileStore = create((set, get) => ({
   // --- Async Operations (DB) ---
 
   /**
+   * Pulisce completamente il file system, sia nello stato che in IndexedDB.
+   */
+  clearFileSystem: async () => {
+    try {
+      await clear(FILES_STORE_NAME); // Svuota la tabella in IndexedDB
+      // Resetta lo stato a quello iniziale, ma mantenendo l'inizializzazione
+      set({
+        ...INITIAL_STATE,
+        isInitialized: true,
+        files: { ...INITIAL_STATE.files }, // Clona per sicurezza
+      });
+    } catch (error) {
+      console.error("Failed to clear file system:", error);
+    }
+  },
+
+  /**
    * Carica tutti i file da IndexedDB e inizializza lo store.
    */
   loadFiles: async () => {
@@ -801,6 +818,55 @@ export const useFileStore = create((set, get) => ({
         error
       );
       alert("Errore durante la creazione o il download del file ZIP.");
+    }
+  },
+
+  /**
+   * Importa un progetto da un file ZIP, cancellando prima il contenuto esistente.
+   * @param {File} zipFile - Il file ZIP caricato dall'utente.
+   */
+  importProjectFromZip: async (zipFile) => {
+    const { clearFileSystem, createFileOrFolder } = get();
+
+    // 1. Mostra un avviso e cancella tutto
+    if (
+      !window.confirm(
+        "Sei sicuro di voler importare un nuovo progetto? Tutti i file attuali verranno eliminati."
+      )
+    ) {
+      return;
+    }
+    await clearFileSystem();
+
+    // 2. Carica e scompatta lo ZIP
+    const zip = new JSZip();
+    try {
+      const content = await zip.loadAsync(zipFile);
+      const filePromises = [];
+
+      content.forEach((relativePath, zipEntry) => {
+        if (!zipEntry.dir) {
+          // È un file, non una cartella
+          const promise = async () => {
+            const fileContent = await zipEntry.async("string");
+            const fullPath = "/" + relativePath;
+
+            // La funzione applyFileActions è perfetta per creare ricorsivamente
+            useFileStore
+              .getState()
+              .applyFileActions(
+                [{ path: fullPath, content: fileContent }],
+                "create_files"
+              );
+          };
+          filePromises.push(promise());
+        }
+      });
+
+      await Promise.all(filePromises);
+    } catch (error) {
+      console.error("Error importing project from ZIP:", error);
+      alert("Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto.");
     }
   },
 }));
