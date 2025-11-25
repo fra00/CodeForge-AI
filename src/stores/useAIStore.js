@@ -118,7 +118,7 @@ const createNewChat = (id) => ({
 const buildSystemPrompt = (context, multiFileTaskState) => {
   let prompt = `${SYSTEM_PROMPT}
 ---
-### 🧠 DECISION PROTOCOL (Follow strictly)
+# 🧠 DECISION PROTOCOL (Follow strictly)
 
 1. **ANALYSIS PHASE**
    - Ask: "Do I have all the file contents required to answer/code?"
@@ -140,26 +140,47 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
 3. **TEXT RESPONSE**
    - Only use 'text_response' if no code changes or file reads are needed.
 ---
-# ⚠️ REGOLE CRITICHE PER I FILE (GOLDEN RULES)
+# ⚠️ REGOLE CRITICHE (GOLDEN RULES)
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
-3. **JSON PURO**: Scrivi testo o spiegazioni **SOLO** dentro il JSON object.
+3. **JSON PURO**: Non mettere testo libero, spiegazioni o commenti fuori dal JSON.
 4. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
 5. OGNI RISPOSTA DEVE AVERE UNA SOLA **ACTION**.
-6. **ESCAPE DELLE STRINGHE JSON**: All'interno di qualsiasi valore "stringa" nel JSON (come in "content"), i caratteri speciali DEVONO essere sempre escapati."}
-7. EVITA {\n"action":"[stringa]"} , usa invece {"action":"[stringa]"} 
+6. **ESCAPE RIGOROSO DEI VALORI STRINGA** All'interno di qualsiasi valore stringa nel JSON (come in "content"), i caratteri che hanno un significato speciale in JSON DEVONO essere escapati. 
+  In particolare:
+    - Un newline REALE (carattere ASCII 10) deve essere rappresentato come \n (due caratteri: backslash + n)
+    - Un backslash REALE (\) deve essere rappresentato come \\ (due backslash)
+7. VERIFICA LA CORRETTA STUTTURA DEL JSON PRIMA DI RISPOSTA.
 ---
 
-# Istruzioni per l'Output Strutturato (JSON)
-⚠️ ATTENZIONE: Ogni risposta in formato diverso da JSON è da considerare errata.
- 
+# 📋 FORMATO DELLA RISPOSTA JSON
+## 🔴 CONTRATTO DI SERIALIZZAZIONE JSON (PUNTO DI FALLIMENTO CRITICO)
+
+**LA STRUTTURA DEL JSON DEVE ESSERE COMPATTATA AL 100%. L'OUTPUT È RICEVUTO DA UN PARSER AUTOMATICO E NON TOLLERA GLI ERRORI DI SERIALIZZAZIONE.**
+
+**🚫 JSON STRUCTURAL NEWLINE FORBIDDEN 🚫**
+È **ASSOLUTAMENTE VIETATO** usare caratteri di newline (\`\\n\` o \`\\r\`) o tabulazioni tra gli elementi 
+sintattici del JSON: chiavi, due punti (\`:\`), virgole (\`,\`) o graffe (\`{}\`).
+
+| AZIONE | ESEMPIO SCORRETTO (VIETATO) | ESEMPIO CORRETTO (OBBLIGATORIO) |
+| :--- | :--- | :--- |
+| **Separazione Chiave/Valore** | \`"key":\n "value"\` | \`"key":"value"\` |
+| **Separazione Elementi** | \`"v1",\n "v2"\` | \`"v1","v2"\` |
+| **Formattazione Strutturale** | \`{\n "action": ...}\` | \`{"action":...}\` |
+
+**LA VIOLAZIONE DI QUESTA REGOLA COMPORTA UN ERRORE DI PARSING NON RECUPERABILE. 
+GARANTISCI CHE L'INTERO JSON SIA SU UNA SINGOLA RIGA LOGICA PRIMA DI INVIARLO.**
+
+
+# 📘 AZIONI DISPONIBILI
+Attenzione: gli esempi sono formattati per leggibilità umana
+
 ## 1. Risposta Solo Testuale
 Usa 'text_response' per dare risposte solo testuali o esplicative.
 **NON mescolare text_response con tool_call.**
 
 \`\`\`json
-{
-"action":"text_response"
+{"action":"text_response",
 "text_response" : "Spiegazione dettagliata..."
 }
 \`\`\`
@@ -229,7 +250,8 @@ Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti
 2. **ORDER**: Ordinali logicamente (dependencies first).
 3. **EXECUTE**:
    - Usa 'start_multi_file' action.
-   - Definisci il 'plan' con una descrizione e un array di 'files' che sono i file da modificare o creare.  
+   - Definisci il 'plan' (plan.decription field) con una descrizione 
+   - Definisci un array di 'files' che sono i file da modificare o creare (plan.files_to_modify field).  
    - IMMEDIATELY genera il codice per FIRST file in the 'first_file' field.
 
 #### JSON Template for STARTING a task:
@@ -288,12 +310,12 @@ NON usare "text_response". NON fermarti. Procedi col codice per "${nextFile}".
   "next_file": {
     "action": "[create_files|update_files]",
     "file": { 
-      "path": "TARGET_FILE_PATH_HERE", 
+      "path": "PATH_OF_NEXT_FILE", 
       "content": "FULL_UPDATED_CONTENT_HERE" 
     }
   },
   "message": "{
-                \"action\":\"text_response\"
+                \"action\":\"text_response\",
                 \"text_response\" : \"Now updating [File Name]...\"
               }"  
 }
@@ -301,9 +323,11 @@ NON usare "text_response". NON fermarti. Procedi col codice per "${nextFile}".
 
 ## AUTO VERIFICA:
 - La tua risposta è SOLO un oggetto JSON valido?
+- Il JSON è su UNA SOLA RIGA LOGICA senza newline strutturali?
+- Il JSON è sintatticamente valido (tutte le parentesi aperte sono chiuse)?
 - Ogni file ha un "path" valido?
 
-se non hai rispettato una di queste regole, correggi la tua risposta
+Se una delle verifiche fallisce, NON inviare la risposta. RIPETI l'intera risposta JSON, compattata e corretta, prima di procedere.
 `;
   }
 
