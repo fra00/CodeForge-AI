@@ -9,8 +9,8 @@ import Alert from "../ui/Alert";
 import Button from "../ui/Button";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
 
-const DEFAULT_CLAUDE_MODEL = 'claude-3-5-sonnet-20240620';
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20240620";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 /**
  * Componente principale per l'AI Assistant.
@@ -27,17 +27,18 @@ export function AIPanel() {
     newChat,
     selectChat,
     deleteChat,
+    deleteMessage, // Recupero la nuova funzione
     getMessages,
   } = useAIStore();
 
-  const messages = useAIStore(state => state.getMessages());
+  const messages = useAIStore((state) => state.getMessages());
 
-  const { aiProvider, claudeApiKey, geminiApiKey, llmModel } = useSettingsStore();
+  const { aiProvider, claudeApiKey, geminiApiKey, llmModel } =
+    useSettingsStore();
   const activeFile = useFileStore((state) => state.getActiveFile());
-  const insertContent = useEditorStore((state) => state.insertContent); // Funzione per inserire codice nell'editor
 
   const messagesEndRef = useRef(null);
-  const apiKey = aiProvider === 'claude' ? claudeApiKey : geminiApiKey; // Usa la chiave del provider selezionato
+  const apiKey = aiProvider === "claude" ? claudeApiKey : geminiApiKey; // Usa la chiave del provider selezionato
   const isGenerating = isStreaming; // Rinominato per chiarezza
 
   // Carica la cronologia all'avvio
@@ -62,19 +63,10 @@ export function AIPanel() {
       content: activeFile.content,
     };
 
-    const modelToUse = llmModel || (aiProvider === 'claude' ? DEFAULT_CLAUDE_MODEL : DEFAULT_GEMINI_MODEL);
+    const modelToUse =
+      llmModel ||
+      (aiProvider === "claude" ? DEFAULT_CLAUDE_MODEL : DEFAULT_GEMINI_MODEL);
     sendMessage(prompt, context, aiProvider, apiKey, modelToUse); // Passa provider, apiKey e modelToUse
-  };
-
-  const handleInsertCode = (code) => {
-    if (activeFile && insertContent) {
-      insertContent(activeFile.id, code);
-      alert("Codice inserito nell'editor.");
-    } else {
-      alert(
-        "Impossibile inserire il codice. Assicurati che un file sia attivo nell'editor."
-      );
-    }
   };
 
   const handleDeleteChat = (chatId) => {
@@ -89,7 +81,8 @@ export function AIPanel() {
         <Alert variant="warning">
           <p className="font-bold">API Key Mancante</p>
           <p>
-            Per utilizzare l'AI Assistant, devi configurare la tua chiave API per il provider selezionato nel pannello **Settings**.
+            Per utilizzare l'AI Assistant, devi configurare la tua chiave API
+            per il provider selezionato nel pannello **Settings**.
           </p>
         </Alert>
       </div>
@@ -102,7 +95,12 @@ export function AIPanel() {
       <div className="w-64 border-r border-editor-border p-2 flex flex-col flex-shrink-0">
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-sm font-semibold text-white">Cronologia Chat</h3>
-          <Button onClick={newChat} variant="ghost" size="small" title="Nuova Chat">
+          <Button
+            onClick={newChat}
+            variant="ghost"
+            size="small"
+            title="Nuova Chat"
+          >
             <Plus size={16} />
           </Button>
         </div>
@@ -149,13 +147,15 @@ export function AIPanel() {
               Inizia una conversazione con l'AI Assistant.
             </div>
           )}
-          {messages.filter(m => m.role !== 'system').map((message) => (
-            <ChatMessage
-              key={message.id} // Usiamo l'ID univoco per una chiave stabile
-              message={message}
-              onInsertCode={handleInsertCode}
-            />
-          ))}
+          {messages
+            .filter((m) => m.role !== "system")
+            .map((message) => (
+              <ChatMessage
+                key={message.id} // Usiamo l'ID univoco per una chiave stabile
+                message={message}
+                onDeleteMessage={deleteMessage} // Passo la funzione per eliminare
+              />
+            ))}
           <div ref={messagesEndRef} />
         </div>
 

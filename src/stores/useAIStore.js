@@ -531,6 +531,32 @@ export const useAIStore = create((set, get) => ({
   },
 
   /**
+   * Elimina un singolo messaggio dalla chat corrente.
+   */
+  deleteMessage: async (messageId) => {
+    // Impedisce di eliminare il system prompt o l'ultimo messaggio rimasto
+    const messages = get().getMessages();
+    if (messages.length <= 2 || messageId === "system-prompt") {
+      console.warn("Cannot delete the last message or the system prompt.");
+      return;
+    }
+
+    set((state) => ({
+      conversations: state.conversations.map((chat) => {
+        if (chat.id === state.currentChatId) {
+          return {
+            ...chat,
+            messages: chat.messages.filter((m) => m.id !== messageId),
+          };
+        }
+        return chat;
+      }),
+    }));
+
+    // Salva la conversazione aggiornata su IndexedDB
+    await get().saveConversation();
+  },
+  /**
    * Logica principale di interazione con l'AI
    */
   sendMessage: async (
