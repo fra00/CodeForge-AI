@@ -12,26 +12,32 @@ export const extractAndSanitizeJson = (text) => {
   const trimmed = text.trim();
   let rawJsonContent = null;
 
+  var splitted = trimmed.split("# [content-file]:");
+
+  const textToJson = splitted[0].trim();
+  const contentFile = splitted[1]?.trim();
   // --- Strategia 1: Trova Parentesi Graffe Esterne (La più robusta) ---
   // Cerca il JSON più esteso. Questo gestisce sia i casi con testo libero
   // che il tuo edge case ('{"response":"```json{}```"}').
 
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
+  const firstBrace = textToJson.indexOf("{");
+  const lastBrace = textToJson.lastIndexOf("}");
 
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     // Estrae dal primo '{' all'ultimo '}'
-    rawJsonContent = trimmed.substring(firstBrace, lastBrace + 1).trim();
-  } else if (trimmed.startsWith("[")) {
+    rawJsonContent = textToJson.substring(firstBrace, lastBrace + 1).trim();
+  } else if (textToJson.startsWith("[")) {
     // Controllo aggiuntivo per array JSON (che non usano graffe)
-    const firstBracket = trimmed.indexOf("[");
-    const lastBracket = trimmed.lastIndexOf("]");
+    const firstBracket = textToJson.indexOf("[");
+    const lastBracket = textToJson.lastIndexOf("]");
     if (
       firstBracket !== -1 &&
       lastBracket !== -1 &&
       lastBracket > firstBracket
     ) {
-      rawJsonContent = trimmed.substring(firstBracket, lastBracket + 1).trim();
+      rawJsonContent = textToJson
+        .substring(firstBracket, lastBracket + 1)
+        .trim();
     }
   }
 
@@ -46,15 +52,17 @@ export const extractAndSanitizeJson = (text) => {
   if (!rawJsonContent) {
     const startDelimiter = "```";
     const endDelimiter = "```";
-    const startIndex = trimmed.indexOf(startDelimiter);
+    const startIndex = textToJson.indexOf(startDelimiter);
 
     if (startIndex !== -1) {
       const contentStart = startIndex + startDelimiter.length;
-      const contentEnd = trimmed.lastIndexOf(endDelimiter);
+      const contentEnd = textToJson.lastIndexOf(endDelimiter);
 
       if (contentEnd > contentStart) {
         // Estrae e verifica che assomigli a JSON
-        const tempContent = trimmed.substring(contentStart, contentEnd).trim();
+        const tempContent = textToJson
+          .substring(contentStart, contentEnd)
+          .trim();
         if (tempContent.startsWith("{") || tempContent.startsWith("[")) {
           rawJsonContent = tempContent;
         }
@@ -65,19 +73,19 @@ export const extractAndSanitizeJson = (text) => {
   // **************** VALIDAZIONE E SANIFICAZIONE FINALE ****************
 
   if (!rawJsonContent) {
-    return null;
+    return { rawJsonContent: null, contentFile };
   }
 
   // Tentativo A: Standard JSON (più veloce)
   try {
     JSON.parse(rawJsonContent);
-    return rawJsonContent; // Già valido
+    return { rawJsonContent, contentFile }; // Già valido
   } catch (e) {
     // Tentativo B: JSON5 (per correggere errori comuni di LLM)
     try {
       const parsedObject = JSON5.parse(rawJsonContent);
       // Normalizza e restituisce una stringa JSON rigorosa
-      return JSON.stringify(parsedObject);
+      return { rawJsonContent: JSON.stringify(parsedObject), contentFile };
     } catch (e5) {
       // Se fallisce anche JSON5, si può provare un'ultima pulizia mirata
       // per rimuovere i delimitatori Markdown non escapati, che possono rompere JSON5.
@@ -86,10 +94,10 @@ export const extractAndSanitizeJson = (text) => {
         .replace(/```/g, "");
       try {
         const parsedObject = JSON5.parse(aggressivelyCleaned);
-        return JSON.stringify(parsedObject);
+        return { rawJsonContent: JSON.stringify(parsedObject), contentFile };
       } catch (eFinal) {
         // Fallimento definitivo
-        return null;
+        return { rawJsonContent: null, contentFile };
       }
     }
   }

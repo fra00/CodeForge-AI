@@ -1,5 +1,6 @@
 - every N call minimize context to minime use of token , minimize and optimize token
   (do summary of context)
+- read console for error after finish insert/modify file
 - add new button to clear project file (ask confirm before procede)
 - show loader when LLM think to show when process in progress
 - section of editor resizable

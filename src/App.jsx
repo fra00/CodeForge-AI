@@ -13,6 +13,7 @@ import { TemplatePanel } from "./components/Templates/TemplatePanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
+import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
 
 /**
  * Componente principale dell'applicazione.
@@ -26,6 +27,9 @@ function App() {
   );
   const resetProject = useFileStore((state) => state.resetProject);
   const isInitialized = useFileStore((state) => state.isInitialized);
+  const isBlockingOperation = useFileStore(
+    (state) => state.isBlockingOperation
+  );
   const {
     theme,
     sidebarVisible,
@@ -104,6 +108,9 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
+      {/* Overlay per operazioni bloccanti */}
+      {isBlockingOperation && <BlockingOverlay />}
+
       {/* Header */}
       <Header
         onNewProject={handleNewProject}

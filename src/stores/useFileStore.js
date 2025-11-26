@@ -8,6 +8,7 @@ const FILES_STORE_NAME = "files";
 const ROOT_ID = "root";
 const INITIAL_STATE = {
   isInitialized: false,
+  isBlockingOperation: false, // Stato per bloccare la UI durante operazioni critiche
   files: {
     [ROOT_ID]: {
       id: ROOT_ID,
@@ -78,6 +79,9 @@ export const useFileStore = create((set, get) => ({
 
   // Funzione interna per aggiornare lo stato
   set: (updater) => set(updater),
+
+  // --- Azione per lo stato di blocco ---
+  _setBlocking: (isBlocking) => set({ isBlockingOperation: isBlocking }),
 
   // --- Async Operations (DB) ---
 
@@ -506,6 +510,61 @@ export const useFileStore = create((set, get) => ({
   },
 
   /**
+   * Funzione di utility interna per creare un nodo (file/cartella) dato un percorso completo.
+   * Gestisce la creazione ricorsiva delle cartelle necessarie.
+   * @private
+   */
+  _createNodeFromPath: (fullPath, content = "") => {
+    const { rootId, createFileOrFolder, updateFileContent } = get();
+
+    // A ogni chiamata, prendi lo stato più recente dei file
+    const currentFiles = get().files;
+    const existingNode = findNodeByPath(currentFiles, fullPath);
+
+    // Comportamento UPSERT: se il file esiste, lo aggiorniamo.
+    if (existingNode && !existingNode.isFolder) {
+      updateFileContent(existingNode.id, content);
+      return { message: `✓ File ${fullPath} updated (already existed)` };
+    }
+    if (existingNode && existingNode.isFolder) {
+      throw new Error(`Cannot create file ${fullPath}, a folder with the same name exists.`);
+    }
+
+    const parts = fullPath.split("/").filter(Boolean);
+    const name = parts.pop();
+    if (!name) {
+      throw new Error(`Invalid path provided: ${fullPath}`);
+    }
+
+    let parentId = rootId;
+    const results = [];
+
+    // Crea le cartelle ricorsivamente
+    for (const part of parts) {
+      const parentNode = get().files[parentId];
+      const childId = parentNode.children.find(
+        (id) => get().files[id]?.name === part
+      );
+
+      if (childId && get().files[childId]?.isFolder) {
+        parentId = childId;
+      } else {
+        const newFolderNode = createFileOrFolder(parentId, part, true);
+        if (!newFolderNode) {
+          throw new Error(`Failed to create intermediate directory: "${part}"`);
+        }
+        parentId = newFolderNode.id;
+        results.push(`✓ Folder /${part} created`);
+      }
+    }
+
+    // Ora crea il file
+    createFileOrFolder(parentId, name, false, content);
+    results.push(`✓ File ${fullPath} created`);
+    return { message: results.join("\n") };
+  },
+
+  /**
    * Applica un set di azioni (creazione, modifica, eliminazione) al VFS.
    * Utilizzata per eseguire le istruzioni strutturate dell'AI.
    * @param {object[]} actions - Array di oggetti azione (path, content).
@@ -513,66 +572,20 @@ export const useFileStore = create((set, get) => ({
    */
   applyFileActions: (actions, actionType) => {
     const state = get();
-    const { createFileOrFolder, updateFileContent, deleteNode } = state;
+    const { _createNodeFromPath, updateFileContent, deleteNode } = state;
     const results = [];
 
     for (const action of actions) {
       const { path, content } = action;
-
-      // Normalizza il percorso
       const normalizedPath = path.startsWith("/") ? path : "/" + path;
-      const existingNode = findNodeByPath(state.files, normalizedPath);
 
       try {
-        if (actionType === "create_files") {
-          // ✅ UPSERT: Crea o sovrascrive
-          if (existingNode && !existingNode.isFolder) {
-            // File esiste già, aggiorna il contenuto (sovrascrive)
-            updateFileContent(existingNode.id, content);
-            results.push(`✓ File ${normalizedPath} updated (already existed)`);
-          } else if (existingNode && existingNode.isFolder) {
-            // Errore: esiste una cartella con lo stesso nome
-            results.push(
-              `✗ ERROR: Cannot create file ${normalizedPath}, a folder with the same name exists.`
-            );
-          } else {
-            // File non esiste, crealo (e le cartelle necessarie)
-            const parts = normalizedPath.split("/").filter(Boolean);
-            const name = parts.pop();
-            
-            let parentId = state.rootId;
-
-            // Crea le cartelle ricorsivamente
-            for (const part of parts) {
-              // A ogni iterazione, prendi lo stato più recente dei file
-              const currentFiles = useFileStore.getState().files;
-              const parentNode = currentFiles[parentId];
-              
-              const childId = parentNode.children.find(
-                (id) => currentFiles[id]?.name === part
-              );
-              const childNode = childId ? currentFiles[childId] : null;
-
-              if (childNode && childNode.isFolder) {
-                parentId = childNode.id;
-              } else if (childNode && !childNode.isFolder) {
-                throw new Error(`A file named "${part}" exists where a folder was expected.`);
-              } else {
-                const newFolderNode = createFileOrFolder(parentId, part, true);
-                if (!newFolderNode) {
-                  throw new Error(`Failed to create intermediate directory: "${part}"`);
-                }
-                parentId = newFolderNode.id;
-                results.push(`✓ Folder /${part} created`);
-              }
-            }
-
-            // Ora crea il file
-            createFileOrFolder(parentId, name, false, content);
-            results.push(`✓ File ${normalizedPath} created`);
-          }
-        } else if (actionType === "update_files") {
+        if (actionType === "create_file") {
+          const result = _createNodeFromPath(normalizedPath, content);
+          results.push(result.message);
+        } else if (actionType === "update_file") {
           // ✅ UPDATE: Solo se esiste già
+          const existingNode = findNodeByPath(state.files, normalizedPath);
           if (!existingNode) {
             results.push(
               `✗ ERROR: File ${normalizedPath} not found. Use 'create_files' to create it.`
@@ -588,8 +601,9 @@ export const useFileStore = create((set, get) => ({
 
           updateFileContent(existingNode.id, content);
           results.push(`✓ File ${normalizedPath} updated`);
-        } else if (actionType === "delete_files") {
+        } else if (actionType === "delete_file") {
           // ✅ DELETE: Elimina se esiste
+          const existingNode = findNodeByPath(state.files, normalizedPath);
           if (!existingNode) {
             results.push(`✗ ERROR: Node ${normalizedPath} not found`);
             continue;
@@ -826,7 +840,7 @@ export const useFileStore = create((set, get) => ({
    * @param {File} zipFile - Il file ZIP caricato dall'utente.
    */
   importProjectFromZip: async (zipFile) => {
-    const { clearFileSystem, createFileOrFolder } = get();
+    const { clearFileSystem, _createNodeFromPath, _setBlocking } = get();
 
     // 1. Mostra un avviso e cancella tutto
     if (
@@ -836,37 +850,37 @@ export const useFileStore = create((set, get) => ({
     ) {
       return;
     }
-    await clearFileSystem();
 
-    // 2. Carica e scompatta lo ZIP
-    const zip = new JSZip();
+    _setBlocking(true);
     try {
-      const content = await zip.loadAsync(zipFile);
-      const filePromises = [];
+      await clearFileSystem();
 
-      content.forEach((relativePath, zipEntry) => {
-        if (!zipEntry.dir) {
-          // È un file, non una cartella
-          const promise = async () => {
-            const fileContent = await zipEntry.async("string");
-            const fullPath = "/" + relativePath;
+      // 2. Carica e scompatta lo ZIP
+      const zip = new JSZip();
+      try {
+        const content = await zip.loadAsync(zipFile);
+        const filePromises = [];
 
-            // La funzione applyFileActions è perfetta per creare ricorsivamente
-            useFileStore
-              .getState()
-              .applyFileActions(
-                [{ path: fullPath, content: fileContent }],
-                "create_files"
-              );
-          };
-          filePromises.push(promise());
-        }
-      });
+        content.forEach((relativePath, zipEntry) => {
+          if (!zipEntry.dir) {
+            const promise = async () => {
+              const fileContent = await zipEntry.async("string");
+              const fullPath = "/" + relativePath;
+              _createNodeFromPath(fullPath, fileContent);
+            };
+            filePromises.push(promise());
+          }
+        });
 
-      await Promise.all(filePromises);
+        await Promise.all(filePromises);
+      } catch (error) {
+        console.error("Error importing project from ZIP:", error);
+        alert("Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto.");
+      }
     } catch (error) {
-      console.error("Error importing project from ZIP:", error);
-      alert("Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto.");
+      console.error("Critical error during import operation:", error);
+    } finally {
+      _setBlocking(false);
     }
   },
 
@@ -875,7 +889,7 @@ export const useFileStore = create((set, get) => ({
    * Chiede conferma, pulisce il file system e ricarica lo stato iniziale.
    */
   resetProject: async () => {
-    const { clearFileSystem, loadFiles } = get();
+    const { clearFileSystem, loadFiles, _setBlocking } = get();
 
     if (
       !window.confirm(
@@ -885,9 +899,16 @@ export const useFileStore = create((set, get) => ({
       return;
     }
 
-    // Pulisce DB e stato in memoria
-    await clearFileSystem();
-    // Ricarica lo stato, che creerà il file di default perché il DB è vuoto
-    await loadFiles(true); // Forza il ricaricamento per creare il file di default
+    _setBlocking(true);
+    try {
+      // Pulisce DB e stato in memoria
+      await clearFileSystem();
+      // Ricarica lo stato, che creerà il file di default perché il DB è vuoto
+      await loadFiles(true); // Forza il ricaricamento per creare il file di default
+    } catch (error) {
+      console.error("Critical error during project reset:", error);
+    } finally {
+      _setBlocking(false);
+    }
   },
 }));

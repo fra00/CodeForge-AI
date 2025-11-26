@@ -37,9 +37,9 @@ const initialMessages = [
 const validateResponseStructure = (response) => {
   if (!response || typeof response !== "object") return false;
   const validActions = [
-    "create_files",
-    "update_files",
-    "delete_files",
+    "create_file",
+    "update_file",
+    "delete_file",
     "text_response",
     "tool_call",
     "start_multi_file",
@@ -129,7 +129,7 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
    - Ask: "Does this task involve modifying ONE file or MULTIPLE files?"
    
    - **CASE A: Single File**
-     Action: Use 'update_files' (or create/delete).
+     Action: Use 'update_file' (or create/delete).
      Result: Task done immediately.
 
    - **CASE B: Multiple Files (Refactoring/Global Changes)**
@@ -143,14 +143,8 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
 # ⚠️ REGOLE CRITICHE (GOLDEN RULES)
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 2. **BATCH READING**: Se devi leggere più file (es. per analisi), usa "paths": [...] (array) in una singola chiamata read_file.
-3. **JSON PURO**: Non mettere testo libero, spiegazioni o commenti fuori dal JSON.
-4. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
-5. OGNI RISPOSTA DEVE AVERE UNA SOLA **ACTION**.
-6. **ESCAPE RIGOROSO DEI VALORI STRINGA** All'interno di qualsiasi valore stringa nel JSON (come in "content"), i caratteri che hanno un significato speciale in JSON DEVONO essere escapati. 
-  In particolare:
-    - Un newline REALE (carattere ASCII 10) deve essere rappresentato come \n (due caratteri: backslash + n)
-    - Un backslash REALE (\) deve essere rappresentato come \\ (due backslash)
-7. VERIFICA LA CORRETTA STUTTURA DEL JSON PRIMA DI RISPOSTA.
+3. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
+4. OGNI RISPOSTA DEVE AVERE UNA SOLA **ACTION**.
 ---
 
 # 📋 FORMATO DELLA RISPOSTA JSON
@@ -171,13 +165,21 @@ sintattici del JSON: chiavi, due punti (\`:\`), virgole (\`,\`) o graffe (\`{}\`
 **LA VIOLAZIONE DI QUESTA REGOLA COMPORTA UN ERRORE DI PARSING NON RECUPERABILE. 
 GARANTISCI CHE L'INTERO JSON SIA SU UNA SINGOLA RIGA LOGICA PRIMA DI INVIARLO.**
 
+## JSON e file content:
+Il JSON DEVE essere seguito da un separatore speciale \`# [content-file]:\` 
+per indicare l'inizio del contenuto del file (se applicabile).
+\`\`\`json
+{ ... JSON OBJECT ... }
+# [content-file]:
+export default function Component() { return <div>Hello</div>; }
+
+\`\`\`
 
 # 📘 AZIONI DISPONIBILI
-Attenzione: gli esempi sono formattati per leggibilità umana
 
 ## 1. Risposta Solo Testuale
 Usa 'text_response' per dare risposte solo testuali o esplicative.
-**NON mescolare text_response con tool_call.**
+**NON USARE text_response con tool_call.**
 
 \`\`\`json
 {"action":"text_response",
@@ -214,31 +216,31 @@ Esempio Batch Reading:
 \`\`\`
 
 ## 3. Azioni sul File System (Scrittura)
-Usa 'create_files', 'update_files', 'delete_files' per operazioni immediate.
-Ogni file DEVE avere "path".
+Usa 'create_file', 'update_file', 'delete_file' per operazioni immediate.
+Attenzion il path "path" è obbligatorio.
+
 ### A. Create / Update (Scrittura)
 Richiede "content". Se aggiorni un file, fornisci il contenuto COMPLETO.
-\`\`\`json
-{
-  "action": "update_files",
-  "files": [
-    {
-      "path": "src/components/Header.jsx",
-      "content": "export default function Header() { return <div>Logo</div>; }"
-    }
-  ]
-}
+L'azione gestisce UN SOLO file alla volta, usa l'oggetto 'file'.
 \`\`\`
-*(Nota: puoi usare "create_files" con la stessa identica struttura)*
+{
+  "action": "update_file",
+  "file": {
+    "path": "src/components/Header.jsx"
+  }
+}
+# [content-file]: 
+export default function Header() { return <div>Logo</div>; }
+\`\`\`
+
+*(Nota: "create_file" usa la stessa identica struttura)*
 
 ### B. Delete (Cancellazione)
-Richiede solo "path".
+Richiede solo "path" nell'oggetto 'file'.
 \`\`\`json
 {
-  "action": "delete_files",
-  "files": [
-    { "path": "src/unused/legacy.js" }
-  ]
+  "action": "delete_file",
+  "file": { "path": "src/unused/legacy.js" }
 }
 \`\`\`
 
@@ -255,6 +257,7 @@ Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti
    - IMMEDIATELY genera il codice per FIRST file in the 'first_file' field.
 
 #### JSON Template for STARTING a task:
+Richiede "content".
 \`\`\`json
 {
   "action": "start_multi_file",
@@ -263,14 +266,15 @@ Usa 'start_multi_file' e 'continue_multi_file' per refactoring che toccano molti
     "files_to_modify": ["src/utils/api.js", "src/App.jsx", "src/components/Login.jsx"]
   },
   "first_file": {
-    "action": "[create_files|update_files]", 
+    "action": "[create_file|update_file]", 
     "file": { 
       "path": "src/utils/api.js", 
-      "content": "export const newApi = ..." 
     }
   },
   "message": "Starting refactor: Updating API utility first."
 }
+# [content-file]:
+export const newApi = ...
 \`\`\`
 
 ---
@@ -303,27 +307,23 @@ Il prossimo file che DEVI modificare è: "${nextFile}".
 
 La tua PROSSIMA risposta DEVE essere un JSON con action "continue_multi_file" per processare "${nextFile}".
 NON usare "text_response". NON fermarti. Procedi col codice per "${nextFile}".
-
+Richiede "content".
 \`\`\`json
 {
   "action": "continue_multi_file",
   "next_file": {
-    "action": "[create_files|update_files]",
+    "action": "[create_file|update_file]",
     "file": { 
       "path": "PATH_OF_NEXT_FILE", 
-      "content": "FULL_UPDATED_CONTENT_HERE" 
     }
   },
-  "message": "{
-                \"action\":\"text_response\",
-                \"text_response\" : \"Now updating [File Name]...\"
-              }"  
+  "message": "Now updating [File Name]..."  
 }
+# [content-file]:
+export const newApi = ...
 \`\`\`
 
 ## AUTO VERIFICA:
-- La tua risposta è SOLO un oggetto JSON valido?
-- Il JSON è su UNA SOLA RIGA LOGICA senza newline strutturali?
 - Il JSON è sintatticamente valido (tutte le parentesi aperte sono chiuse)?
 - Ogni file ha un "path" valido?
 
@@ -343,9 +343,9 @@ const getResponseSchema = () => ({
     action: {
       type: "string",
       enum: [
-        "create_files",
-        "update_files",
-        "delete_files",
+        "create_file",
+        "update_file",
+        "delete_file",
         "text_response",
         "tool_call",
         "start_multi_file",
@@ -362,6 +362,14 @@ const getResponseSchema = () => ({
         },
         required: ["path"],
       },
+    },
+    file: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        content: { type: "string" },
+      },
+      required: ["path"],
     },
     text_response: { type: "string" },
     message: { type: "string" },
@@ -580,6 +588,306 @@ export const useAIStore = create((set, get) => ({
     // Salva la conversazione aggiornata su IndexedDB
     await get().saveConversation();
   },
+
+  // --- Action Handlers (Refactored from sendMessage) ---
+
+  /**
+   * Gestisce la logica per una risposta testuale semplice.
+   * @returns {boolean} Sempre false per interrompere il loop.
+   * @private
+   */
+  _handleTextResponse: (text_response) => {
+    const { addMessage } = get();
+    const finalContent = text_response || "✅ Done.";
+    addMessage({
+      id: Date.now().toString(),
+      role: "assistant",
+      content: finalContent,
+    });
+    return false; // Interrompe il loop
+  },
+
+  /**
+   * Gestisce la logica per le azioni sul VFS (create, update, delete).
+   * @returns {boolean} Sempre false per interrompere il loop.
+   * @private
+   */
+  _handleVFSAction: (action, file) => {
+    const { addMessage } = get();
+    const fileStore = useFileStore.getState();
+
+    // Validazione
+    if (!file || typeof file !== "object") {
+      addMessage({
+        id: `${Date.now()}-err`,
+        role: "user",
+        content: `❌ Error: Action '${action}' requires a 'file' object.`,
+      });
+      return true; // Forza Retry
+    }
+    if (
+      !file.path ||
+      typeof file.path !== "string" ||
+      file.path.trim() === ""
+    ) {
+      addMessage({
+        id: `${Date.now()}-path-err`,
+        role: "user",
+        content: `❌ CRITICAL ERROR: You attempted '${action}' without specifying "path".`,
+      });
+      return true; // Forza Retry
+    }
+
+    let results;
+    try {
+      results = fileStore.applyFileActions([file], action);
+    } catch (e) {
+      results = [`Error: ${e.message}`];
+    }
+
+    const resultText =
+      results.length > 0
+        ? results.map((r) => `• ${r}`).join("\n")
+        : "Files processed successfully.";
+    addMessage({
+      id: Date.now().toString(),
+      role: "assistant",
+      content: `✓ Action: ${action}\n\n${resultText}`,
+    });
+
+    return false; // Interrompe il loop
+  },
+
+  /**
+   * Gestisce la logica per una chiamata a un tool (list_files, read_file).
+   * @returns {boolean} Sempre true per continuare il loop.
+   * @private
+   */
+  _handleToolCall: (tool_call) => {
+    const { addMessage } = get();
+    const fileStore = useFileStore.getState();
+
+    const isBatchRead =
+      tool_call.function_name === "read_file" &&
+      Array.isArray(tool_call.args.paths);
+    const logArgs = isBatchRead
+      ? `(Batch: ${tool_call.args.paths.length} files)`
+      : `(Args: ${JSON.stringify(tool_call.args)})`;
+
+    addMessage({
+      id: `${Date.now()}-tool-req`,
+      role: "assistant",
+      content: `[Executing: ${tool_call.function_name} ${logArgs}]`,
+    });
+
+    let toolResult = "";
+    try {
+      if (isBatchRead) {
+        const paths = tool_call.args.paths;
+        const results = paths.map((path) => {
+          try {
+            const singleResult = fileStore.executeToolCall({
+              function_name: "read_file",
+              args: { path },
+            });
+            return `--- FILE: ${path} ---\n${singleResult || "(Empty File)"}`;
+          } catch (err) {
+            return `--- ERROR READING FILE: ${path} ---\n${err.message}`;
+          }
+        });
+        toolResult = results.join("\n\n");
+      } else {
+        toolResult = fileStore.executeToolCall(tool_call);
+      }
+    } catch (e) {
+      toolResult = `Error executing tool: ${e.message}`;
+    }
+
+    if (!toolResult || toolResult.trim() === "") {
+      toolResult = "[Action executed successfully, but returned no content]";
+    }
+
+    addMessage({
+      id: `${Date.now()}-tool-res`,
+      role: "user",
+      content: `[Tool Result]\n${toolResult}`,
+    });
+
+    return true; // Continua il loop
+  },
+
+  /**
+   * Gestisce la logica per l'inizio di un task multi-file.
+   * @returns {boolean} True per continuare il loop, false per interromperlo.
+   * @private
+   */
+  _handleStartMultiFile: (plan, first_file, message) => {
+    const { addMessage } = get();
+    const fileStore = useFileStore.getState();
+
+    set({
+      multiFileTaskState: {
+        plan: plan.description,
+        allFiles: plan.files_to_modify,
+        completedFiles: [],
+        remainingFiles: plan.files_to_modify,
+      },
+    });
+    addMessage({
+      id: Date.now().toString(),
+      role: "assistant",
+      content: message || `📋 Start Task: ${plan.description}`,
+    });
+
+    try {
+      const results = fileStore.applyFileActions(
+        [first_file.file],
+        first_file.action
+      );
+      addMessage({
+        id: `${Date.now()}-res`,
+        role: "assistant",
+        content: results.join("\n") || "✅ First file action completed.",
+      });
+
+      const currentPath = first_file.file.path;
+      set((state) => ({
+        multiFileTaskState: {
+          ...state.multiFileTaskState,
+          completedFiles: [currentPath],
+          remainingFiles: state.multiFileTaskState.remainingFiles.filter(
+            (f) => normalizePath(f) !== normalizePath(currentPath)
+          ),
+        },
+      }));
+
+      if (get().multiFileTaskState.remainingFiles.length > 0) {
+        return true; // Continua il loop
+      } else {
+        set({ multiFileTaskState: null });
+        return false; // Interrompe il loop
+      }
+    } catch (e) {
+      addMessage({
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Error: ${e.message}`,
+      });
+      set({ multiFileTaskState: null });
+      return false; // Interrompe il loop
+    }
+  },
+
+  /**
+   * Gestisce la logica per la continuazione di un task multi-file.
+   * @returns {boolean} True per continuare il loop, false per interromperlo.
+   * @private
+   */
+  _handleContinueMultiFile: (next_file, message) => {
+    const { addMessage } = get();
+    const fileStore = useFileStore.getState();
+    const taskState = get().multiFileTaskState;
+
+    if (!taskState) {
+      addMessage({
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "⚠️ No active task state found.",
+      });
+      return false; // Interrompe il loop
+    }
+
+    addMessage({
+      id: Date.now().toString(),
+      role: "assistant",
+      content: message || `Continuing with ${next_file.file.path}...`,
+    });
+
+    try {
+      const results = fileStore.applyFileActions(
+        [next_file.file],
+        next_file.action
+      );
+      addMessage({
+        id: `${Date.now()}-res`,
+        role: "assistant",
+        content: results.join("\n") || "✅ Action completed.",
+      });
+
+      const currentPath = next_file.file.path;
+      set((state) => ({
+        multiFileTaskState: {
+          ...state.multiFileTaskState,
+          completedFiles: [
+            ...state.multiFileTaskState.completedFiles,
+            currentPath,
+          ],
+          remainingFiles: state.multiFileTaskState.remainingFiles.filter(
+            (f) => normalizePath(f) !== normalizePath(currentPath)
+          ),
+        },
+      }));
+
+      if (get().multiFileTaskState.remainingFiles.length > 0) {
+        return true; // Continua il loop
+      } else {
+        addMessage({
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "✅ Multi-file task completed.",
+        });
+        set({ multiFileTaskState: null });
+        return false; // Interrompe il loop
+      }
+    } catch (e) {
+      addMessage({
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Error: ${e.message}`,
+      });
+      set({ multiFileTaskState: null });
+      return false; // Interrompe il loop
+    }
+  },
+
+  /**
+   * Dispatcher principale che smista la risposta parsata dell'AI all'handler corretto.
+   * @returns {boolean} True se il loop di `sendMessage` deve continuare, altrimenti false.
+   * @private
+   */
+  _handleParsedResponse: (jsonObject) => {
+    const {
+      action,
+      file,
+      text_response,
+      tool_call,
+      plan,
+      first_file,
+      next_file,
+      message,
+    } = jsonObject;
+
+    if (action === "text_response") {
+      return get()._handleTextResponse(text_response);
+    }
+    if (["create_file", "update_file", "delete_file"].includes(action)) {
+      return get()._handleVFSAction(action, file);
+    }
+    if (action === "tool_call" && tool_call) {
+      return get()._handleToolCall(tool_call);
+    }
+    if (action === "start_multi_file" && plan && first_file) {
+      return get()._handleStartMultiFile(plan, first_file, message);
+    }
+    if (action === "continue_multi_file" && next_file) {
+      return get()._handleContinueMultiFile(next_file, message);
+    }
+
+    // Se nessuna azione corrisponde, interrompi per sicurezza
+    console.warn("Unhandled action type:", action);
+    return false;
+  },
+
   /**
    * Logica principale di interazione con l'AI
    */
@@ -653,9 +961,9 @@ export const useAIStore = create((set, get) => ({
       while (toolCallCount < maxToolCalls) {
         // 🛑 LOGICA SEMPLIFICATA
         if (startFilePath && startFilePath !== "none") {
-          // Cerchiamo il file originale nello store aggiornato
-          const freshFile = Array(useFileStore.getState().files).find(
-            (f) => normalizePath(f.path) === normalizePath(startFilePath)
+          // FIX: Usa Object.values() per iterare correttamente l'oggetto files
+          const freshFile = Object.values(useFileStore.getState().files).find(
+            (f) => f && normalizePath(f.path) === normalizePath(startFilePath)
           );
 
           if (freshFile) {
@@ -726,8 +1034,8 @@ export const useAIStore = create((set, get) => ({
           rawText = JSON.stringify(response);
         }
 
-        const jsonString = extractAndSanitizeJson(rawText);
-        if (!jsonString) {
+        const { rawJsonContent, contentFile } = extractAndSanitizeJson(rawText);
+        if (!rawJsonContent) {
           addMessage({
             id: Date.now().toString(),
             role: "assistant",
@@ -739,11 +1047,49 @@ export const useAIStore = create((set, get) => ({
 
         let jsonObject = null;
         try {
-          jsonObject = JSON.parse(jsonString);
+          jsonObject = JSON.parse(rawJsonContent);
         } catch (e) {
-          console.error("JSON Parse Error:", e, "Raw JSON String:", jsonString);
+          console.error(
+            "JSON Parse Error:",
+            e,
+            "Raw JSON String:",
+            rawJsonContent
+          );
         }
         jsonObject = normalizeResponse(jsonObject);
+
+        // --- INIEZIONE PRAGMATICA (Opzione 2) ---
+        // Centralizziamo qui la logica di "arricchimento" del JSON.
+        // Iniettiamo il `contentFile` nell'oggetto corretto prima di procedere.
+        if (contentFile) {
+          const action = jsonObject.action;
+
+          if (
+            ["create_file", "update_file"].includes(action) &&
+            jsonObject.file
+          ) {
+            jsonObject.file.content = contentFile;
+            console.log(
+              `[Injector] Injected content into single action file: ${jsonObject.file.path}`
+            );
+          } else if (
+            action === "start_multi_file" &&
+            jsonObject.first_file?.file
+          ) {
+            jsonObject.first_file.file.content = contentFile;
+            console.log(
+              `[Injector] Injected content into multi-file start: ${jsonObject.first_file.file.path}`
+            );
+          } else if (
+            action === "continue_multi_file" &&
+            jsonObject.next_file?.file
+          ) {
+            jsonObject.next_file.file.content = contentFile;
+            console.log(
+              `[Injector] Injected content into multi-file continue: ${jsonObject.next_file.file.path}`
+            );
+          }
+        }
 
         console.log("Parsed AI Response JSON:", jsonObject);
 
@@ -751,274 +1097,16 @@ export const useAIStore = create((set, get) => ({
           throw new Error(`Invalid action: ${jsonObject.action}`);
         }
 
-        const {
-          action,
-          files,
-          text_response,
-          tool_call,
-          plan,
-          first_file,
-          next_file,
-          message,
-        } = jsonObject;
+        // --- DISPATCHER ---
+        // Delega la gestione della risposta agli handler specifici.
+        // Il risultato booleano determina se il loop deve continuare.
+        toolCallCount++; // Incrementa il contatore per ogni interazione
+        const shouldContinue = get()._handleParsedResponse(jsonObject);
 
-        // === START MULTI-FILE ===
-        if (action === "start_multi_file" && plan && first_file) {
-          set({
-            multiFileTaskState: {
-              plan: plan.description,
-              allFiles: plan.files_to_modify,
-              completedFiles: [],
-              remainingFiles: plan.files_to_modify,
-            },
-          });
-
-          // Fallback content
-          const msgContent = message || `📋 Start Task: ${plan.description}`;
-          addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: msgContent,
-          });
-
-          try {
-            const results = fileStore.applyFileActions(
-              [first_file.file],
-              first_file.action
-            );
-            const resultText =
-              results.length > 0
-                ? results.join("\n")
-                : "✅ First file action completed.";
-            addMessage({
-              id: `${Date.now()}-res`,
-              role: "assistant",
-              content: resultText,
-            });
-
-            const currentPath = first_file.file.path;
-            set((state) => ({
-              multiFileTaskState: {
-                ...state.multiFileTaskState,
-                completedFiles: [currentPath],
-                remainingFiles: state.multiFileTaskState.remainingFiles.filter(
-                  (f) => normalizePath(f) !== normalizePath(currentPath)
-                ),
-              },
-            }));
-
-            if (get().multiFileTaskState.remainingFiles.length > 0) {
-              toolCallCount++;
-              continue;
-            } else {
-              set({ multiFileTaskState: null });
-              break;
-            }
-          } catch (e) {
-            addMessage({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: `Error: ${e.message}`,
-            });
-            set({ multiFileTaskState: null });
-            break;
-          }
-        }
-
-        // === CONTINUE MULTI-FILE ===
-        if (action === "continue_multi_file" && next_file) {
-          const taskState = get().multiFileTaskState;
-          if (!taskState) {
-            addMessage({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: "⚠️ No active task state found.",
-            });
-            break;
-          }
-
-          const msgContent =
-            message || `Continuing with ${next_file.file.path}...`;
-          addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: msgContent,
-          });
-
-          try {
-            const results = fileStore.applyFileActions(
-              [next_file.file],
-              next_file.action
-            );
-            const resultText =
-              results.length > 0 ? results.join("\n") : "✅ Action completed.";
-            addMessage({
-              id: `${Date.now()}-res`,
-              role: "assistant",
-              content: resultText,
-            });
-
-            const currentPath = next_file.file.path;
-            set((state) => ({
-              multiFileTaskState: {
-                ...state.multiFileTaskState,
-                completedFiles: [
-                  ...state.multiFileTaskState.completedFiles,
-                  currentPath,
-                ],
-                remainingFiles: state.multiFileTaskState.remainingFiles.filter(
-                  (f) => normalizePath(f) !== normalizePath(currentPath)
-                ),
-              },
-            }));
-
-            if (get().multiFileTaskState.remainingFiles.length > 0) {
-              toolCallCount++;
-              continue;
-            } else {
-              addMessage({
-                id: Date.now().toString(),
-                role: "assistant",
-                content: "✅ Multi-file task completed.",
-              });
-              set({ multiFileTaskState: null });
-              break;
-            }
-          } catch (e) {
-            addMessage({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: `Error: ${e.message}`,
-            });
-            set({ multiFileTaskState: null });
-            break;
-          }
-        }
-
-        // === GESTIONE TOOL CALL (BATCH & SINGLE) ===
-        if (action === "tool_call" && tool_call) {
-          toolCallCount++;
-          const isBatchRead =
-            tool_call.function_name === "read_file" &&
-            Array.isArray(tool_call.args.paths);
-
-          const logArgs = isBatchRead
-            ? `(Batch: ${tool_call.args.paths.length} files)`
-            : `(Args: ${JSON.stringify(tool_call.args)})`;
-
-          addMessage({
-            id: `${Date.now()}-tool-req`,
-            role: "assistant",
-            content: `[Executing: ${tool_call.function_name} ${logArgs}]`,
-          });
-
-          let toolResult = "";
-
-          try {
-            if (isBatchRead) {
-              const paths = tool_call.args.paths;
-              const results = [];
-              for (const path of paths) {
-                try {
-                  const singleResult = fileStore.executeToolCall({
-                    function_name: "read_file",
-                    args: { path: path },
-                  });
-                  const safeContent = singleResult || "(Empty File)";
-                  results.push(`--- FILE: ${path} ---\n${safeContent}`);
-                } catch (err) {
-                  results.push(
-                    `--- ERROR READING FILE: ${path} ---\n${err.message}`
-                  );
-                }
-              }
-              toolResult = results.join("\n\n");
-            } else {
-              toolResult = fileStore.executeToolCall(tool_call);
-            }
-          } catch (e) {
-            toolResult = `Error executing tool: ${e.message}`;
-          }
-
-          // Fallback Content per evitare stringhe vuote
-          if (!toolResult || toolResult.trim() === "") {
-            toolResult =
-              "[Action executed successfully, but returned no content]";
-          }
-
-          addMessage({
-            id: `${Date.now()}-tool-res`,
-            role: "user",
-            content: `[Tool Result]\n${toolResult}`,
-          });
-
-          continue; // LOOP
-        }
-
-        // === TEXT RESPONSE ===
-        if (action === "text_response") {
-          const finalContent = text_response || jsonObject.text || "✅ Done.";
-          addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: finalContent,
-          });
-          break;
-        }
-
-        // === VFS ACTIONS (SINGLE) ===
-        if (["create_files", "update_files", "delete_files"].includes(action)) {
-          // 1. Controllo esistenza array
-          if (!files || !Array.isArray(files) || files.length === 0) {
-            const errorMsg = `❌ Error: Action '${action}' requires a 'files' array, but it was missing or empty.`;
-            addMessage({
-              id: `${Date.now()}-err`,
-              role: "user",
-              content: errorMsg,
-            });
-            continue;
-          }
-
-          // 2. AUTO-CORREZIONE: Controllo integrità Path
-          const filesWithMissingPath = files.filter(
-            (f) => !f.path || typeof f.path !== "string" || f.path.trim() === ""
-          );
-
-          if (filesWithMissingPath.length > 0) {
-            console.warn(
-              "AI attempted to operate on files without path:",
-              filesWithMissingPath
-            );
-            const errorMsg = `❌ CRITICAL ERROR: You attempted '${action}' without specifying "path".
-REQUIRED ACTION: Regenerate JSON providing "path" for all files.`;
-            addMessage({
-              id: `${Date.now()}-path-err`,
-              role: "user",
-              content: errorMsg,
-            });
-            continue; // Forza Retry
-          }
-
-          // 3. Esecuzione Sicura
-          let results;
-          try {
-            results = fileStore.applyFileActions(files, action);
-          } catch (e) {
-            console.error("VFS Execution Error:", e);
-            results = [`Error: ${e.message}`];
-          }
-
-          const resultText =
-            results.length > 0
-              ? results.map((r) => `• ${r}`).join("\n")
-              : "Files processed successfully.";
-
-          addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: `✓ Action: ${action}\n\n${resultText}`,
-          });
-          break;
+        if (shouldContinue) {
+          continue; // Prossima iterazione del while loop
+        } else {
+          break; // Esci dal while loop
         }
       }
 
