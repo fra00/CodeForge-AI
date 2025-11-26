@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { initDB, getAll, put, remove } from "../utils/indexedDB";
+import { initDB, getAll, put, remove, clear } from "../utils/indexedDB";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
@@ -101,8 +101,8 @@ export const useFileStore = create((set, get) => ({
   /**
    * Carica tutti i file da IndexedDB e inizializza lo store.
    */
-  loadFiles: async () => {
-    if (get().isInitialized) return;
+  loadFiles: async (forceReload = false) => {
+    if (get().isInitialized && !forceReload) return;
 
     try {
       await initDB();
@@ -868,5 +868,26 @@ export const useFileStore = create((set, get) => ({
       console.error("Error importing project from ZIP:", error);
       alert("Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto.");
     }
+  },
+
+  /**
+   * Resetta l'intero progetto allo stato iniziale di default.
+   * Chiede conferma, pulisce il file system e ricarica lo stato iniziale.
+   */
+  resetProject: async () => {
+    const { clearFileSystem, loadFiles } = get();
+
+    if (
+      !window.confirm(
+        "Sei sicuro di voler creare un nuovo progetto? Tutti i file attuali verranno eliminati."
+      )
+    ) {
+      return;
+    }
+
+    // Pulisce DB e stato in memoria
+    await clearFileSystem();
+    // Ricarica lo stato, che creerà il file di default perché il DB è vuoto
+    await loadFiles(true); // Forza il ricaricamento per creare il file di default
   },
 }));

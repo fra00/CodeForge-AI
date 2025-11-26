@@ -24,6 +24,7 @@ function App() {
   const importProjectFromZip = useFileStore(
     (state) => state.importProjectFromZip
   );
+  const resetProject = useFileStore((state) => state.resetProject);
   const isInitialized = useFileStore((state) => state.isInitialized);
   const {
     theme,
@@ -48,6 +49,7 @@ function App() {
   }, [theme]);
 
   // Funzioni di callback per l'Header
+  const handleNewProject = resetProject;
   const handleExport = downloadProjectZip; // Collega la funzione dello store
   const handleOpenSettings = () => setActivePanel("settings");
 
@@ -104,6 +106,7 @@ function App() {
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
       {/* Header */}
       <Header
+        onNewProject={handleNewProject}
         onExport={handleExport}
         onImport={triggerImport} // Passa la nuova funzione
         onOpenSettings={handleOpenSettings}

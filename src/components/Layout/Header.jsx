@@ -1,13 +1,13 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
-import { Upload, Download, Settings, Code } from "lucide-react";
+import { FilePlus, Upload, Download, Settings, Code } from "lucide-react";
 import { useFileStore } from "../../stores/useFileStore";
 
 /**
  * Componente Header per la barra superiore dell'applicazione.
  * Contiene il titolo, il nome del progetto e i pulsanti di azione.
  */
-export function Header({ onImport, onExport, onOpenSettings }) {
+export function Header({ onNewProject, onImport, onExport, onOpenSettings }) {
   const store = useFileStore();
   const activeFile = useMemo(
     () => store.getActiveFile(),
@@ -30,13 +30,13 @@ export function Header({ onImport, onExport, onOpenSettings }) {
 
       {/* Pulsanti di Azione */}
       <div className="flex items-center space-x-3">
-        {/* <button
-          onClick={onNewFile}
+        <button
+          onClick={onNewProject}
           className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
-          title="Nuovo File (Ctrl+N)"
+          title="Nuovo Progetto"
         >
           <FilePlus size={18} />
-        </button> */}
+        </button>
         <button
           onClick={onImport}
           className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
@@ -64,6 +64,7 @@ export function Header({ onImport, onExport, onOpenSettings }) {
 }
 
 Header.propTypes = {
+  onNewProject: PropTypes.func.isRequired,
   onImport: PropTypes.func.isRequired,
   onExport: PropTypes.func.isRequired,
   onOpenSettings: PropTypes.func.isRequired,
