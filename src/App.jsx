@@ -13,6 +13,7 @@ import { TemplatePanel } from "./components/Templates/TemplatePanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
+// La ErrorDialog non è più necessaria, il sistema ora è automatico.
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
 
 /**
@@ -40,12 +41,29 @@ function App() {
   const { isSaving } = useAutoSave(); // Inizializza l'autosave
 
   const [activePanel, setActivePanel] = useState("editor");
+
   // Lo stato showFileExplorer non è più necessario, la visibilità è gestita da useSettingsStore
 
   // Carica i file all'avvio dell'applicazione
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  // Imposta il gestore di errori per l'iframe
+  useEffect(() => {
+    // Inizializza il contesto globale se non esiste
+    window.projectContext = window.projectContext || {}; // Correzione: Garantisce che l'oggetto esista.
+    window.projectContext.lastIframeError = null;
+
+    window.handleIframeError = (message) => {
+      console.log("ERROR LATCHED:", message);
+      window.projectContext.lastIframeError = message;
+    };
+
+    return () => {
+      if (window.handleIframeError) delete window.handleIframeError;
+    };
+  }, []);
 
   // Sincronizza il tema con l'attributo data-theme sul body
   useEffect(() => {
@@ -84,10 +102,7 @@ function App() {
   switch (activePanel) {
     case "editor":
       mainContent = (
-        <div className="flex h-full overflow-hidden">
-          <EditorArea className={previewVisible ? "w-2/3" : "flex-grow"} />
-          {previewVisible && <LivePreview className="w-1/3" />}
-        </div>
+        <EditorArea className={previewVisible ? "w-1/2" : "w-full"} />
       );
       break;
     case "ai":
@@ -103,21 +118,20 @@ function App() {
       mainContent = <SettingsPanel />;
       break;
     default:
-      mainContent = <EditorArea />;
+      mainContent = <AIPanel />;
   }
 
   return (
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
       {/* Overlay per operazioni bloccanti */}
-      {isBlockingOperation && <BlockingOverlay />}
-
-      {/* Header */}
       <Header
         onNewProject={handleNewProject}
         onExport={handleExport}
         onImport={triggerImport} // Passa la nuova funzione
         onOpenSettings={handleOpenSettings}
       />
+
+      {isBlockingOperation && <BlockingOverlay />}
 
       {/* Input nascosto per l'upload del file ZIP */}
       <input
@@ -136,7 +150,25 @@ function App() {
         {activePanel === "editor" && sidebarVisible && <FileExplorer />}
 
         {/* Main Panel */}
-        <div className="flex-1 overflow-hidden min-w-0">{mainContent}</div>
+        <div className="flex-1 flex overflow-hidden min-w-0">
+          {/* Contenitore per i pannelli principali (Editor, AI, etc.) */}
+          <div className="w-full h-full">{mainContent}</div>
+
+          {/* 
+            LivePreview è ora sempre montato ma visibile solo se siamo 
+            nel pannello editor E la preview è attiva.
+            La classe 'hidden' lo nasconde senza smontarlo, mantenendolo "vivo".
+          */}
+          <div
+            className={
+              activePanel === "editor" && previewVisible
+                ? "w-1/2 h-full"
+                : "hidden"
+            }
+          >
+            <LivePreview />
+          </div>
+        </div>
       </main>
 
       {/* Status Bar (Riutilizzo la StatusBar dell'editor) */}

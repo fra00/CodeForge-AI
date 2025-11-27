@@ -1,91 +1,97 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import PropTypes from 'prop-types';
-import { useFileStore } from '../../stores/useFileStore';
-import { buildPreviewHTML } from '../../utils/previewBuilder';
-import { PreviewToolbar } from './PreviewToolbar';
-import { ConsolePanel } from './Console';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import PropTypes from "prop-types";
+import { useFileStore } from "../../stores/useFileStore";
+import { buildPreviewHTML } from "../../utils/previewBuilder";
+import { PreviewToolbar } from "./PreviewToolbar";
+import { ConsolePanel } from "./Console";
 
-const viewportSizes = {
-  mobile: { width: 375, height: '100%', label: 'iPhone SE' },
-  tablet: { width: 768, height: '100%', label: 'iPad' },
-  desktop: { width: '100%', height: '100%', label: 'Desktop' },
-  full: { width: '100%', height: '100%', label: 'Full' },
-};
+/**
+ * Script da iniettare nell'iframe per catturare gli errori della console
+ * e inviarli alla finestra principale tramite una funzione di callback.
+ */
+const errorCaptureScript = `
+  (function() {
+    function report(type, data) {
+      if (typeof window.parent.handleIframeLog === 'function') {
+        window.parent.handleIframeLog({ type, data, timestamp: new Date().toISOString() });
+      }
+    }
+
+    const originalConsole = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn,
+    };
+
+    console.log = (...args) => { report('log', args); originalConsole.log.apply(console, args); };
+    console.error = (...args) => { report('error', args); originalConsole.error.apply(console, args); };
+    console.warn = (...args) => { report('warn', args); originalConsole.warn.apply(console, args); };
+
+    window.addEventListener('error', (event) => {
+      // Gli errori globali sono stringhe, quindi li mettiamo in un array per coerenza
+      report('error', [event.message]);
+    });
+  })();
+  `;
 
 /**
  * Componente principale per la Live Preview.
  * Gestisce il rendering dell'iframe, l'auto-refresh e la console.
  */
-export function LivePreview({ className = '' }) {
-  const { files, rootId } = useFileStore();
+export function LivePreview({ className = "" }) {
+  const files = useFileStore((state) => state.files);
+  const rootId = useFileStore((state) => state.rootId);
   const [logs, setLogs] = useState([]);
-  const [viewport, setViewport] = useState('desktop');
   const iframeRef = useRef(null);
-  const currentViewport = viewportSizes[viewport];
 
   const handleClearConsole = useCallback(() => {
     setLogs([]);
   }, []);
 
-  const updateIframe = useCallback(() => {
+  const srcDoc = useMemo(() => {
     const htmlContent = buildPreviewHTML(files, rootId);
-    const iframe = iframeRef.current;
-    if (iframe) {
-      iframe.srcdoc = htmlContent;
+    const headEndIndex = htmlContent.indexOf("</head>");
+    if (headEndIndex !== -1) {
+      return `${htmlContent.slice(0, headEndIndex)}<script>${errorCaptureScript}</script>${htmlContent.slice(headEndIndex)}`;
     }
+    return `<html><head><script>${errorCaptureScript}</script></head><body>${htmlContent}</body></html>`;
   }, [files, rootId]);
 
-  // Auto-refresh quando i file cambiano
+  // Listener per i log e gli errori dall'iframe
   useEffect(() => {
-    updateIframe();
-  }, [files, updateIframe]);
-
-  // Listener per i messaggi dalla console dell'iframe
-  useEffect(() => {
-    const handleMessage = (event) => {
-      // Ignora messaggi da altre origini
-      if (event.source !== iframeRef.current?.contentWindow) return;
-
-      const { type, data } = event.data;
-      if (['log', 'error', 'warn'].includes(type)) {
-        setLogs(prevLogs => [...prevLogs, { type, data, timestamp: new Date().toISOString() }]);
+    window.handleIframeLog = (log) => {
+      if (log.type === "error") {
+        // Invia l'errore anche al gestore globale in App.jsx
+        if (typeof window.handleIframeError === "function") {
+          window.handleIframeError(
+            Array.isArray(log.data) ? log.data.join(" ") : log.data
+          );
+        }
       }
+      setLogs((prevLogs) => [...prevLogs, log]);
     };
-
-    window.addEventListener('message', handleMessage);
     return () => {
-      window.removeEventListener('message', handleMessage);
+      delete window.handleIframeLog;
     };
   }, []);
 
   return (
     <div className={`flex flex-col h-full w-full bg-editor-bg ${className}`}>
-      <PreviewToolbar
-        onRefresh={updateIframe}
-        onViewportChange={setViewport}
-        currentViewport={viewport}
+      <PreviewToolbar onRefresh={() => (iframeRef.current.srcdoc = srcDoc)} />
+      <iframe
+        ref={iframeRef}
+        srcDoc={srcDoc}
+        title="Live Preview"
+        className="w-full flex-1 border-none bg-white"
+        sandbox="allow-scripts allow-same-origin"
       />
-      
-      <div className="flex-1 flex items-center overflow-hidden">
-        <iframe
-          ref={iframeRef}
-          title="Live Preview"
-          sandbox="allow-scripts allow-same-origin" // allow-same-origin è necessario per postMessage
-          className="bg-white border border-editor-border transition-all duration-300"
-          style={{
-            width: currentViewport.width,
-            height: currentViewport.height,
-            maxWidth: viewport === 'full' ? '100%' : currentViewport.width,
-            maxHeight: viewport === 'full' ? '100%' : currentViewport.height,
-          }}
-        />
-      </div>
-
       <ConsolePanel logs={logs} onClear={handleClearConsole} />
     </div>
   );
 }
-
-LivePreview.propTypes = {
-  className: PropTypes.string,
-};

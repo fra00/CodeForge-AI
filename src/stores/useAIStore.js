@@ -7,6 +7,8 @@ import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
+const MAX_AUTO_FIX_ATTEMPTS = 3;
+
 const SYSTEM_PROMPT = `You are Code Assistant, a highly skilled software engineer AI assistant. 
 Your primary function is to assist the user with code-related tasks, such as explaining code, refactoring, generating new code, 
 or debugging.
@@ -149,6 +151,14 @@ Il tuo unico scopo è risolvere il problema dell'utente. Per farlo, segui questi
 
 3. **TEXT RESPONSE**
    - Only use 'text_response' if no code changes or file reads are needed.
+
+# ⚙️ AUTO-DEBUGGING PROTOCOL
+After you perform a file modification, the system will automatically execute the code.
+If a runtime error occurs, you will receive a new message starting with "[SYSTEM-ERROR]".
+When you see this message, your ONLY task is to analyze the error and the related code to provide a fix.
+Do not ask for confirmation, just provide the corrected code using the 'update_file' action.
+Example system error message: "[SYSTEM-ERROR] The last action caused a runtime error: ReferenceError: 'myVar' is not defined. Please fix it."
+
 ---
 # ⚠️ REGOLE CRITICHE (GOLDEN RULES)
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
@@ -438,6 +448,7 @@ export const useAIStore = create((set, get) => ({
   isStreaming: false,
   error: null,
   multiFileTaskState: null,
+  autoFixAttempts: 0,
 
   getMessages: () => {
     const { conversations, currentChatId } = get();
@@ -600,11 +611,69 @@ export const useAIStore = create((set, get) => ({
     await get().saveConversation();
   },
 
+  // --- Auto-Debugging Cycle ---
+
+  /**
+   * Attende e controlla se l'ultima azione ha causato un errore di runtime.
+   * Se sì, avvia un ciclo di correzione. Altrimenti, procede.
+   * @returns {boolean} True se il ciclo principale deve continuare, false altrimenti.
+   * @private
+   */
+  _checkForRuntimeErrors: async () => {
+    const { addMessage, sendMessage, multiFileTaskState } = get();
+
+    // Attendi che l'iframe si ricarichi e che eventuali errori vengano catturati
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const lastError = window.projectContext?.lastIframeError;
+    window.projectContext.lastIframeError = null; // Consuma l'errore
+
+    if (lastError) {
+      const currentAttempts = get().autoFixAttempts;
+      if (currentAttempts >= MAX_AUTO_FIX_ATTEMPTS) {
+        const errorMessage = `❌ Auto-fix failed after ${MAX_AUTO_FIX_ATTEMPTS} attempts. Last error: ${lastError}`;
+        addMessage({
+          id: Date.now().toString(),
+          role: "assistant",
+          content: errorMessage,
+        });
+        set({ autoFixAttempts: 0, multiFileTaskState: null }); // Interrompi tutto
+        return false;
+      }
+
+      set({ autoFixAttempts: currentAttempts + 1 });
+      const systemErrorMessage = `[SYSTEM-ERROR] The last action caused a runtime error: "${lastError}". Please analyze the code and fix it.`;
+      addMessage({
+        id: Date.now().toString(),
+        role: "user", // Lo presentiamo come un input di sistema per l'AI
+        content: systemErrorMessage,
+      });
+      return true; // Continua il loop di sendMessage per la correzione
+    }
+
+    // Successo! Nessun errore.
+    set({ autoFixAttempts: 0 });
+
+    // Se siamo in un task multi-file, controlla se è finito.
+    if (multiFileTaskState && multiFileTaskState.remainingFiles.length === 0) {
+      addMessage({
+        id: Date.now().toString(),
+        role: "status", // Ruolo di stato per non inquinare la cronologia AI
+        content: "Multi-file task completed successfully.",
+      });
+      set({ multiFileTaskState: null });
+      return false; // Task finito, interrompi il loop.
+    }
+
+    // Se siamo in un task multi-file e ci sono altri file, continua.
+    return !!multiFileTaskState;
+  },
+
   // --- Action Handlers (Refactored from sendMessage) ---
 
   /**
    * Gestisce la logica per una risposta testuale semplice.
-   * @returns {boolean} Sempre false per interrompere il loop.
+   * @returns {Promise<boolean>} Sempre false per interrompere il loop.
    * @private
    */
   _handleTextResponse: (text_response) => {
@@ -615,15 +684,15 @@ export const useAIStore = create((set, get) => ({
       role: "assistant",
       content: finalContent,
     });
-    return false; // Interrompe il loop
+    return Promise.resolve(false); // Interrompe il loop
   },
 
   /**
    * Gestisce la logica per le azioni sul VFS (create, update, delete).
-   * @returns {boolean} Sempre false per interrompere il loop.
+   * @returns {Promise<boolean>} True se il loop deve continuare (per auto-debug).
    * @private
    */
-  _handleVFSAction: (action, file) => {
+  _handleVFSAction: async (action, file) => {
     const { addMessage } = get();
     const fileStore = useFileStore.getState();
 
@@ -634,7 +703,7 @@ export const useAIStore = create((set, get) => ({
         role: "user",
         content: `❌ Error: Action '${action}' requires a 'file' object.`,
       });
-      return true; // Forza Retry
+      return true; // Forza Retry immediato
     }
     if (
       !file.path ||
@@ -646,7 +715,7 @@ export const useAIStore = create((set, get) => ({
         role: "user",
         content: `❌ CRITICAL ERROR: You attempted '${action}' without specifying "path".`,
       });
-      return true; // Forza Retry
+      return true; // Forza Retry immediato
     }
 
     let results;
@@ -661,17 +730,17 @@ export const useAIStore = create((set, get) => ({
         ? results.map((r) => `• ${r}`).join("\n")
         : "Files processed successfully.";
     addMessage({
-      id: Date.now().toString(),
-      role: "assistant",
-      content: `✓ Action: ${action}\n\n${resultText}`,
+      id: `${Date.now()}-vfs-status`,
+      role: "status", // Ruolo di stato per non inquinare la cronologia AI
+      content: `Action: ${action}\n${resultText}`,
     });
 
-    return false; // Interrompe il loop
+    return await get()._checkForRuntimeErrors();
   },
 
   /**
    * Gestisce la logica per una chiamata a un tool (list_files, read_file).
-   * @returns {boolean} Sempre true per continuare il loop.
+   * @returns {Promise<boolean>} Sempre true per continuare il loop.
    * @private
    */
   _handleToolCall: (tool_call) => {
@@ -686,9 +755,9 @@ export const useAIStore = create((set, get) => ({
       : `(Args: ${JSON.stringify(tool_call.args)})`;
 
     addMessage({
-      id: `${Date.now()}-tool-req`,
-      role: "assistant",
-      content: `[Executing: ${tool_call.function_name} ${logArgs}]`,
+      id: `${Date.now()}-tool-status`,
+      role: "status", // Ruolo speciale per messaggi di stato, non inviati all'AI
+      content: `Executing: ${tool_call.function_name} ${logArgs}`,
     });
 
     let toolResult = "";
@@ -724,15 +793,15 @@ export const useAIStore = create((set, get) => ({
       content: `[Tool Result]\n${toolResult}`,
     });
 
-    return true; // Continua il loop
+    return Promise.resolve(true); // Continua il loop
   },
 
   /**
    * Gestisce la logica per l'inizio di un task multi-file.
-   * @returns {boolean} True per continuare il loop, false per interromperlo.
+   * @returns {Promise<boolean>} True per continuare il loop, false per interromperlo.
    * @private
    */
-  _handleStartMultiFile: (plan, first_file, message) => {
+  _handleStartMultiFile: async (plan, first_file, message) => {
     const { addMessage } = get();
     const fileStore = useFileStore.getState();
 
@@ -746,8 +815,8 @@ export const useAIStore = create((set, get) => ({
     });
     addMessage({
       id: Date.now().toString(),
-      role: "assistant",
-      content: message || `📋 Start Task: ${plan.description}`,
+      role: "status", // Ruolo di stato per non inquinare la cronologia AI
+      content: message || `Start Task: ${plan.description}`,
     });
 
     try {
@@ -757,8 +826,8 @@ export const useAIStore = create((set, get) => ({
       );
       addMessage({
         id: `${Date.now()}-res`,
-        role: "assistant",
-        content: results.join("\n") || "✅ First file action completed.",
+        role: "status", // Ruolo di stato per non inquinare la cronologia AI
+        content: results.join("\n") || "First file action completed.",
       });
 
       const currentPath = first_file.file.path;
@@ -772,12 +841,7 @@ export const useAIStore = create((set, get) => ({
         },
       }));
 
-      if (get().multiFileTaskState.remainingFiles.length > 0) {
-        return true; // Continua il loop
-      } else {
-        set({ multiFileTaskState: null });
-        return false; // Interrompe il loop
-      }
+      return await get()._checkForRuntimeErrors();
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -785,23 +849,23 @@ export const useAIStore = create((set, get) => ({
         content: `Error: ${e.message}`,
       });
       set({ multiFileTaskState: null });
-      return false; // Interrompe il loop
+      return false;
     }
   },
 
   /**
    * Gestisce la logica per la continuazione di un task multi-file.
-   * @returns {boolean} True per continuare il loop, false per interromperlo.
+   * @returns {Promise<boolean>} True per continuare il loop, false per interromperlo.
    * @private
    */
-  _handleContinueMultiFile: (next_file, message) => {
+  _handleContinueMultiFile: async (next_file, message) => {
     const { addMessage } = get();
     const fileStore = useFileStore.getState();
     const taskState = get().multiFileTaskState;
 
     if (!taskState) {
       addMessage({
-        id: Date.now().toString(),
+        id: `${Date.now()}-err`,
         role: "assistant",
         content: "⚠️ No active task state found.",
       });
@@ -809,8 +873,8 @@ export const useAIStore = create((set, get) => ({
     }
 
     addMessage({
-      id: Date.now().toString(),
-      role: "assistant",
+      id: `${Date.now()}-msg`,
+      role: "status", // Ruolo di stato per non inquinare la cronologia AI
       content: message || `Continuing with ${next_file.file.path}...`,
     });
 
@@ -821,8 +885,8 @@ export const useAIStore = create((set, get) => ({
       );
       addMessage({
         id: `${Date.now()}-res`,
-        role: "assistant",
-        content: results.join("\n") || "✅ Action completed.",
+        role: "status", // Ruolo di stato per non inquinare la cronologia AI
+        content: results.join("\n") || "Action completed.",
       });
 
       const currentPath = next_file.file.path;
@@ -839,17 +903,7 @@ export const useAIStore = create((set, get) => ({
         },
       }));
 
-      if (get().multiFileTaskState.remainingFiles.length > 0) {
-        return true; // Continua il loop
-      } else {
-        addMessage({
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "✅ Multi-file task completed.",
-        });
-        set({ multiFileTaskState: null });
-        return false; // Interrompe il loop
-      }
+      return await get()._checkForRuntimeErrors();
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -857,16 +911,16 @@ export const useAIStore = create((set, get) => ({
         content: `Error: ${e.message}`,
       });
       set({ multiFileTaskState: null });
-      return false; // Interrompe il loop
+      return false;
     }
   },
 
   /**
    * Dispatcher principale che smista la risposta parsata dell'AI all'handler corretto.
-   * @returns {boolean} True se il loop di `sendMessage` deve continuare, altrimenti false.
+   * @returns {Promise<boolean>} True se il loop di `sendMessage` deve continuare, altrimenti false.
    * @private
    */
-  _handleParsedResponse: (jsonObject) => {
+  _handleParsedResponse: async (jsonObject) => {
     const {
       action,
       file,
@@ -879,24 +933,24 @@ export const useAIStore = create((set, get) => ({
     } = jsonObject;
 
     if (action === "text_response") {
-      return get()._handleTextResponse(text_response);
+      return await get()._handleTextResponse(text_response);
     }
     if (["create_file", "update_file", "delete_file"].includes(action)) {
-      return get()._handleVFSAction(action, file);
+      return await get()._handleVFSAction(action, file);
     }
     if (action === "tool_call" && tool_call) {
-      return get()._handleToolCall(tool_call);
+      return await get()._handleToolCall(tool_call);
     }
     if (action === "start_multi_file" && plan && first_file) {
-      return get()._handleStartMultiFile(plan, first_file, message);
+      return await get()._handleStartMultiFile(plan, first_file, message);
     }
     if (action === "continue_multi_file" && next_file) {
-      return get()._handleContinueMultiFile(next_file, message);
+      return await get()._handleContinueMultiFile(next_file, message);
     }
 
     // Se nessuna azione corrisponde, interrompi per sicurezza
     console.warn("Unhandled action type:", action);
-    return false;
+    return Promise.resolve(false);
   },
 
   /**
@@ -1004,7 +1058,8 @@ export const useAIStore = create((set, get) => ({
         const messagesForLLM = [
           { role: "system", content: systemPromptWithContext },
           ...conversationHistory
-            .filter((m) => m.role !== "system")
+            // 🛡️ FILTRO API: Rimuove messaggi di sistema e di stato
+            .filter((m) => m.role !== "system" && m.role !== "status")
             .filter((m) => m.content && m.content.toString().trim().length > 0),
         ];
 
@@ -1111,8 +1166,8 @@ export const useAIStore = create((set, get) => ({
         // --- DISPATCHER ---
         // Delega la gestione della risposta agli handler specifici.
         // Il risultato booleano determina se il loop deve continuare.
-        toolCallCount++; // Incrementa il contatore per ogni interazione
-        const shouldContinue = get()._handleParsedResponse(jsonObject);
+        toolCallCount++;
+        const shouldContinue = await get()._handleParsedResponse(jsonObject);
 
         if (shouldContinue) {
           continue; // Prossima iterazione del while loop
