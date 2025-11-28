@@ -11,7 +11,6 @@ import { StatusBar } from "./components/Editor/StatusBar"; // Riutilizzo la Stat
 import { useAutoSave } from "./hooks/useAutoSave"; // Importo useAutoSave per lo stato di salvataggio
 
 import { SnippetPanel } from "./components/Snippets/SnippetPanel";
-import { TemplatePanel } from "./components/Templates/TemplatePanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
 import { ChatHistoryPanel } from "./components/AI/ChatHistoryPanel"; // Importa il pannello
@@ -144,9 +143,6 @@ function App() {
       break;
     case "snippets":
       mainContent = <SnippetPanel />;
-      break;
-    case "templates":
-      mainContent = <TemplatePanel />;
       break;
     case "settings":
       mainContent = <SettingsPanel />;

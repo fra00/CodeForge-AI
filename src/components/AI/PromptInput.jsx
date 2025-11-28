@@ -3,8 +3,6 @@ import PropTypes from "prop-types";
 import { Send, Zap } from "lucide-react";
 import Textarea from "../ui/Textarea";
 import Button from "../ui/Button";
-import { promptTemplates } from "../../data/aiPrompts";
-import Tooltip from "../ui/Tooltip";
 
 /**
  * Componente per l'input del prompt dell'AI Assistant.
@@ -40,11 +38,6 @@ export function PromptInput({ onSend, isGenerating }) {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [prompt]);
-
-  const handleTemplateClick = (template) => {
-    setPrompt(template.template.replace("{code}", "")); // Inizializza il prompt senza {code}
-    textareaRef.current?.focus();
-  };
 
   return (
     <div className="flex flex-col p-4 border-t border-editor-border bg-editor-darker">
