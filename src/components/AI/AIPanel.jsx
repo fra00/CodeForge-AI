@@ -6,8 +6,7 @@ import useEditorStore from "../../store/useEditorStore"; // Assumo che esista
 import { ChatMessage } from "./ChatMessage";
 import { PromptInput } from "./PromptInput";
 import Alert from "../ui/Alert";
-import Button from "../ui/Button";
-import { Plus, Trash2, MessageSquare } from "lucide-react";
+import { ChatHistoryPanel } from "./ChatHistoryPanel";
 
 const DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20240620";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -90,56 +89,12 @@ export function AIPanel() {
   }
 
   return (
-    <div className="flex h-full bg-editor-bg">
-      {/* Sidebar per la lista delle chat */}
-      <div className="w-64 border-r border-editor-border p-2 flex flex-col flex-shrink-0">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-sm font-semibold text-white">Cronologia Chat</h3>
-          <Button
-            onClick={newChat}
-            variant="ghost"
-            size="small"
-            title="Nuova Chat"
-          >
-            <Plus size={16} />
-          </Button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {conversations.map((chat) => (
-            <div
-              key={chat.id}
-              className={`flex items-center justify-between p-2 rounded-md cursor-pointer text-sm ${
-                chat.id === currentChatId
-                  ? "bg-editor-highlight text-white"
-                  : "text-editor-text hover:bg-editor-darker"
-              }`}
-              onClick={() => selectChat(chat.id)}
-            >
-              <span className="truncate flex-1 mr-2">
-                <MessageSquare size={14} className="inline mr-1" />
-                {chat.title}
-              </span>
-              {conversations.length > 1 && (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteChat(chat.id);
-                  }}
-                  variant="ghost"
-                  size="small"
-                  className="p-1 text-editor-text hover:text-red-500"
-                  title="Elimina Chat"
-                >
-                  <Trash2 size={14} />
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
+    // Il pannello della cronologia è stato spostato in App.jsx per un controllo di layout globale.
+    <div className="flex flex-col h-full w-full bg-editor-bg text-white">
       {/* Area Chat Principale */}
-      <div className="flex flex-col flex-1" key={currentChatId}>
+      {/* Aggiunto overflow-hidden per forzare il contenitore a rispettare i suoi limiti di altezza,
+         permettendo al figlio con overflow-y-auto di funzionare correttamente. */}
+      <div className="flex flex-col flex-1 overflow-hidden" key={currentChatId}>
         {/* Area Messaggi */}
         <div className="flex-1 overflow-y-auto">
           {messages.length <= 2 && ( // Solo il system prompt e il messaggio iniziale

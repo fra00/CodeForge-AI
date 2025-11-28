@@ -3,8 +3,10 @@ import { useFileStore } from "./stores/useFileStore";
 import { EditorArea } from "./components/Editor/EditorArea";
 import { LivePreview } from "./components/Preview/LivePreview";
 import { useSettingsStore } from "./stores/useSettingsStore";
+import { useAIStore } from "./stores/useAIStore";
 import { Header } from "./components/Layout/Header";
 import { Sidebar } from "./components/Layout/Sidebar";
+import { useMediaQuery } from "./hooks/useMediaQuery";
 import { StatusBar } from "./components/Editor/StatusBar"; // Riutilizzo la StatusBar dell'editor come status bar principale
 import { useAutoSave } from "./hooks/useAutoSave"; // Importo useAutoSave per lo stato di salvataggio
 
@@ -12,6 +14,7 @@ import { SnippetPanel } from "./components/Snippets/SnippetPanel";
 import { TemplatePanel } from "./components/Templates/TemplatePanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
+import { ChatHistoryPanel } from "./components/AI/ChatHistoryPanel"; // Importa il pannello
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 // La ErrorDialog non è più necessaria, il sistema ora è automatico.
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
@@ -27,6 +30,15 @@ function App() {
     (state) => state.importProjectFromZip
   );
   const resetProject = useFileStore((state) => state.resetProject);
+  // Recupera le funzioni per la gestione della chat AI
+  const {
+    conversations,
+    currentChatId,
+    newChat,
+    selectChat,
+    deleteChat,
+    loadConversations: loadAiConversations,
+  } = useAIStore();
   const isInitialized = useFileStore((state) => state.isInitialized);
   const isBlockingOperation = useFileStore(
     (state) => state.isBlockingOperation
@@ -37,8 +49,10 @@ function App() {
     toggleSidebar,
     previewVisible,
     togglePreview,
+    setFileExplorerVisible,
   } = useSettingsStore();
   const { isSaving } = useAutoSave(); // Inizializza l'autosave
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [activePanel, setActivePanel] = useState("editor");
 
@@ -47,6 +61,7 @@ function App() {
   // Carica i file all'avvio dell'applicazione
   useEffect(() => {
     loadFiles();
+    loadAiConversations();
   }, [loadFiles]);
 
   // Imposta il gestore di errori per l'iframe
@@ -70,6 +85,13 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
+  // Collassa di default il file explorer su mobile
+  useEffect(() => {
+    if (isMobile) {
+      setFileExplorerVisible(false);
+    }
+  }, [isMobile, setFileExplorerVisible]);
+
   // Funzioni di callback per l'Header
   const handleNewProject = resetProject;
   const handleExport = downloadProjectZip; // Collega la funzione dello store
@@ -90,12 +112,24 @@ function App() {
     document.getElementById("import-zip-input")?.click();
 
   if (!isInitialized) {
+    const handleDeleteChat = (chatId) => {
+      if (window.confirm("Sei sicuro di voler eliminare questa chat?")) {
+        deleteChat(chatId);
+      }
+    };
+
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-editor-bg text-white">
         Caricamento File System...
       </div>
     );
   }
+
+  const handleDeleteChat = (chatId) => {
+    if (window.confirm("Sei sicuro di voler eliminare questa chat?")) {
+      deleteChat(chatId);
+    }
+  };
 
   // Determina il contenuto del pannello principale
   let mainContent;
@@ -116,6 +150,9 @@ function App() {
       break;
     case "settings":
       mainContent = <SettingsPanel />;
+      break;
+    case "live-preview": // Nuovo pannello per la preview a schermo intero su mobile
+      mainContent = <LivePreview />;
       break;
     default:
       mainContent = <AIPanel />;
@@ -146,11 +183,21 @@ function App() {
         {/* Sidebar Nav */}
         <Sidebar activePanel={activePanel} onPanelChange={setActivePanel} />
 
-        {/* File Explorer (Mostrato solo se activePanel è 'editor' e sidebarVisible è true) */}
-        {activePanel === "editor" && sidebarVisible && <FileExplorer />}
+        {/* Pannello Laterale Contestuale */}
+        {activePanel === "editor" && <FileExplorer />}
+        {activePanel === "ai" && (
+          <ChatHistoryPanel
+            conversations={conversations}
+            currentChatId={currentChatId}
+            onSelectChat={selectChat}
+            onNewChat={newChat}
+            onDeleteChat={handleDeleteChat}
+          />
+        )}
 
         {/* Main Panel */}
-        <div className="flex-1 flex overflow-hidden min-w-0">
+        {/* Rimosso min-w-0 che causava problemi di schiacciamento */}
+        <div className="flex-1 flex overflow-hidden">
           {/* Contenitore per i pannelli principali (Editor, AI, etc.) */}
           <div className="w-full h-full">{mainContent}</div>
 
@@ -160,8 +207,9 @@ function App() {
             La classe 'hidden' lo nasconde senza smontarlo, mantenendolo "vivo".
           */}
           <div
+            // Su mobile, questa colonna è sempre nascosta. Su desktop, dipende dallo stato.
             className={
-              activePanel === "editor" && previewVisible
+              !isMobile && activePanel === "editor" && previewVisible
                 ? "w-1/2 h-full"
                 : "hidden"
             }

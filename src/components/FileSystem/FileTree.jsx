@@ -98,7 +98,7 @@ export function FileTreeNode({
         className={`flex items-center py-1 px-2 text-sm cursor-pointer whitespace-nowrap rounded transition-colors duration-100 ${
           isActive
             ? "bg-blue-600 text-white"
-            : "hover:bg-editor-highlight text-editor-border"
+            : "hover:bg-editor-highlight text-white"
         }`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleClick}

@@ -1,15 +1,24 @@
 import React, { useMemo, useState } from "react";
-import { FilePlus, FolderPlus, RefreshCw } from "lucide-react";
 import { useFileStore } from "../../stores/useFileStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { FileTree } from "./FileTree";
 import { useContextMenu } from "../../hooks/useContextMenu";
 import { ContextMenu } from "./ContextMenu";
+import Tooltip from "../ui/Tooltip";
+import {
+  PanelLeftClose,
+  PanelRightOpen,
+  FilePlus,
+  FolderPlus,
+  RefreshCw,
+} from "lucide-react";
 
 /**
  * Componente principale per la visualizzazione e gestione del file system virtuale.
  */
 export function FileExplorer() {
   const store = useFileStore();
+  const { fileExplorerVisible, toggleFileExplorer } = useSettingsStore();
   const createNewFile = store.createFileOrFolder;
   const rootId = store.rootId;
   const tree = useMemo(() => store.getTree(), [store.files]);
@@ -88,52 +97,70 @@ export function FileExplorer() {
   };
 
   return (
-    <div className="w-64 bg-editor-darker border-r border-editor-border flex flex-col overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex justify-between items-center h-10 px-2 border-b border-editor-border text-editor-border">
-        <span className="text-sm font-semibold text-white">FILE EXPLORER</span>
-        <div className="flex space-x-1">
+    <aside
+      className={`bg-editor-darker border-r border-editor-border flex flex-col flex-shrink-0 transition-width duration-200 ease-in-out ${
+        fileExplorerVisible ? "w-64" : "w-10" // Larghezza dinamica
+      }`}
+    >
+      <div className="flex items-center justify-between p-2 border-b border-editor-border h-10">
+        {fileExplorerVisible && ( // Mostra il titolo solo quando è aperto
+          <h2 className="text-xs font-bold uppercase text-white whitespace-nowrap overflow-hidden">
+            File Explorer
+          </h2>
+        )}
+        <Tooltip text="Toggle File Explorer">
           <button
-            onClick={handleNewFile}
-            className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
-            title="Nuovo File"
+            onClick={toggleFileExplorer}
+            className="text-white hover:bg-editor-highlight"
           >
-            <FilePlus size={16} />
+            {fileExplorerVisible ? (
+              <PanelLeftClose size={18} />
+            ) : (
+              <PanelRightOpen size={18} />
+            )}
           </button>
-          <button
-            onClick={handleNewFolder}
-            className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
-            title="Nuova Cartella"
-          >
-            <FolderPlus size={16} />
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
-            title="Ricarica"
-          >
-            <RefreshCw size={16} />
-          </button>
+        </Tooltip>
+      </div>
+      {fileExplorerVisible && (
+        <div className="flex justify-end items-center h-10 px-2 border-b border-editor-border text-white">
+          <div className="flex space-x-1">
+            <Tooltip text="Nuovo File">
+              <button
+                onClick={handleNewFile}
+                className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
+              >
+                <FilePlus size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip text="Nuova Cartella">
+              <button
+                onClick={handleNewFolder}
+                className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150"
+              >
+                <FolderPlus size={16} />
+              </button>
+            </Tooltip>
+          </div>
         </div>
-      </div>
-
-      {/* File Tree */}
-      <div
-        className="flex-grow overflow-y-auto p-2 text-white"
-        onContextMenu={(e) => handleContextMenu(e, rootId)}
-      >
-        {tree && (
-          <FileTree
-            tree={tree}
-            handleContextMenu={handleContextMenu}
-            nodeToRename={nodeToRename}
-            setNodeToRename={setNodeToRename}
-          />
-        )}
-        {!tree && (
-          <div className="text-editor-border text-sm">Caricamento...</div>
-        )}
-      </div>
+      )}
+      {fileExplorerVisible && (
+        <div
+          className="p-2 overflow-y-auto text-sm text-white flex-grow"
+          onContextMenu={(e) => handleContextMenu(e, rootId)}
+        >
+          {tree && (
+            <FileTree
+              tree={tree}
+              handleContextMenu={handleContextMenu}
+              nodeToRename={nodeToRename}
+              setNodeToRename={setNodeToRename}
+            />
+          )}
+          {!tree && (
+            <div className="text-editor-border text-sm">Caricamento...</div>
+          )}
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (
@@ -160,7 +187,7 @@ export function FileExplorer() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setNodeToDelete(null)}
-                className="px-4 py-2 rounded bg-editor-highlight hover:bg-editor-border"
+                className="px-4 py-2 rounded bg-editor-highlight hover:bg-editor-border text-white"
               >
                 Annulla
               </button>
@@ -177,6 +204,6 @@ export function FileExplorer() {
           </div>
         </div>
       )}
-    </div>
+    </aside>
   );
 }

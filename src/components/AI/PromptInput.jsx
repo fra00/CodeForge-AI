@@ -48,24 +48,6 @@ export function PromptInput({ onSend, isGenerating }) {
 
   return (
     <div className="flex flex-col p-4 border-t border-editor-border bg-editor-darker">
-      {/* Template Buttons */}
-      <div className="flex space-x-2 mb-3 overflow-x-auto pb-1">
-        {Object.entries(promptTemplates).map(([key, template]) => (
-          <Tooltip key={key} text={template.description}>
-            <Button
-              onClick={() => handleTemplateClick(template)}
-              variant="ghost"
-              size="small"
-              disabled={isGenerating}
-              className="flex-shrink-0 text-xs px-2 py-1 h-auto"
-            >
-              <Zap size={14} className="mr-1" />
-              {template.title}
-            </Button>
-          </Tooltip>
-        ))}
-      </div>
-
       {/* Prompt Input */}
       <div className="flex items-end">
         <Textarea
