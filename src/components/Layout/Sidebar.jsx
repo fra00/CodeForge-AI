@@ -26,7 +26,7 @@ export function Sidebar({ activePanel, onPanelChange }) {
   }
 
   return (
-    <aside className="w-14 bg-editor-darker border-r border-editor-border flex flex-col items-center justify-between py-4">
+    <aside className="w-14 bg-editor-darker border-r border-editor-border flex flex-col items-center py-4">
       {/* Main navigation items */}
       <div className="flex flex-col items-center space-y-4">
         {navItems.map((item) => (
@@ -37,15 +37,6 @@ export function Sidebar({ activePanel, onPanelChange }) {
             onClick={() => onPanelChange(item.id)}
           />
         ))}
-      </div>
-
-      {/* Settings button at the bottom */}
-      <div className="flex flex-col items-center">
-        <SidebarButton
-          item={{ id: "settings", icon: Settings, label: "Settings" }}
-          isActive={activePanel === "settings"}
-          onClick={() => onPanelChange("settings")}
-        />
       </div>
     </aside>
   );
