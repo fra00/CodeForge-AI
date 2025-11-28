@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   previewVisible: true,
   fileExplorerVisible: true,
   chatHistoryVisible: true,
+  editorPreviewSplitSize: 50, // Dimensione di default 50%
 };
 
 /**
@@ -95,6 +96,9 @@ export const useSettingsStore = create(
           set({ fileExplorerVisible: isVisible }),
         toggleFileExplorer: () =>
           set((state) => ({ fileExplorerVisible: !state.fileExplorerVisible })),
+        // Azioni per il layout dell'editor
+        setEditorPreviewSplitSize: (size) =>
+          set({ editorPreviewSplitSize: size }),
         // Azioni per la Cronologia Chat
         toggleChatHistory: () =>
           set((state) => ({ chatHistoryVisible: !state.chatHistoryVisible })),

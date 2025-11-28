@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useFileStore } from "./stores/useFileStore";
 import { EditorArea } from "./components/Editor/EditorArea";
-import { LivePreview } from "./components/Preview/LivePreview";
+import {
+  Panel as ResizablePanel,
+  PanelGroup as ResizablePanelGroup,
+  PanelResizeHandle as ResizableHandle,
+} from "react-resizable-panels";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { useAIStore } from "./stores/useAIStore";
 import { Header } from "./components/Layout/Header";
@@ -14,6 +18,7 @@ import { SnippetPanel } from "./components/Snippets/SnippetPanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
 import { ChatHistoryPanel } from "./components/AI/ChatHistoryPanel"; // Importa il pannello
+import { LivePreview } from "./components/Preview/LivePreview";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 // La ErrorDialog non è più necessaria, il sistema ora è automatico.
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
@@ -49,6 +54,8 @@ function App() {
     previewVisible,
     togglePreview,
     setFileExplorerVisible,
+    editorPreviewSplitSize,
+    setEditorPreviewSplitSize,
   } = useSettingsStore();
   const { isSaving } = useAutoSave(); // Inizializza l'autosave
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -135,7 +142,27 @@ function App() {
   switch (activePanel) {
     case "editor":
       mainContent = (
-        <EditorArea className={previewVisible ? "w-1/2" : "w-full"} />
+        <ResizablePanelGroup
+          direction="horizontal"
+          onLayout={(sizes) => {
+            setEditorPreviewSplitSize(sizes[0]);
+          }}
+        >
+          <ResizablePanel defaultSize={editorPreviewSplitSize}>
+            <EditorArea />
+          </ResizablePanel>
+          {!isMobile && previewVisible && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel
+                defaultSize={100 - editorPreviewSplitSize}
+                minSize={20}
+              >
+                <LivePreview />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       );
       break;
     case "ai":
@@ -193,26 +220,7 @@ function App() {
 
         {/* Main Panel */}
         {/* Rimosso min-w-0 che causava problemi di schiacciamento */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Contenitore per i pannelli principali (Editor, AI, etc.) */}
-          <div className="w-full h-full">{mainContent}</div>
-
-          {/* 
-            LivePreview è ora sempre montato ma visibile solo se siamo 
-            nel pannello editor E la preview è attiva.
-            La classe 'hidden' lo nasconde senza smontarlo, mantenendolo "vivo".
-          */}
-          <div
-            // Su mobile, questa colonna è sempre nascosta. Su desktop, dipende dallo stato.
-            className={
-              !isMobile && activePanel === "editor" && previewVisible
-                ? "w-1/2 h-full"
-                : "hidden"
-            }
-          >
-            <LivePreview />
-          </div>
-        </div>
+        <div className="flex-1 flex overflow-hidden">{mainContent}</div>
       </main>
 
       {/* Status Bar (Riutilizzo la StatusBar dell'editor) */}
