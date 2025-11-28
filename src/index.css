@@ -21,6 +21,39 @@ code {
   font-family: 'Fira Code', 'Courier New', monospace;
 }
 
+/* Stili per i componenti del form, basati sulla documentazione e l'analisi dei componenti */
+@layer components {
+  .form-label {
+    @apply block text-sm font-medium text-white mb-1;
+  }
+
+  .form-input,
+  .form-textarea {
+    @apply w-full rounded-md px-2 py-1;
+    background-color: var(--editor-darker, #1a1a1a);
+    border: 1px solid var(--editor-border, #4a5568);
+    color: var(--editor-foreground, white);
+  }
+
+  .form-select {
+    /* Stili di base per sfondo, bordo e testo usando le variabili di tema */
+    @apply w-full rounded-md px-2 py-1;
+    background-color: var(--editor-darker, #1a1a1a);
+    border: 1px solid var(--editor-border, #4a5568);
+    color: var(--editor-foreground, white);
+
+    /* Stili per la freccia personalizzata */
+    @apply appearance-none bg-no-repeat bg-right pr-8;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  }
+
+  /* Stile per le opzioni all'interno del select per garantire la leggibilità */
+  .form-select option {
+    color: black;
+    background-color: white;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
