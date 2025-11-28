@@ -30,14 +30,14 @@ export function ChatHistoryPanel({
       {/* Header con pulsante di collasso */}
       <div className="flex items-center justify-between p-2 border-b border-editor-border h-10">
         {chatHistoryVisible && (
-          <h2 className="text-xs font-bold uppercase text-editor-foreground whitespace-nowrap overflow-hidden">
+          <h2 className="text-xs font-bold uppercase text-white whitespace-nowrap overflow-hidden">
             Conversazioni
           </h2>
         )}
         <Tooltip text="Toggle History">
           <button
             onClick={toggleChatHistory}
-            className="text-editor-foreground hover:text-white"
+            className="text-white hover:bg-editor-highlight"
           >
             {chatHistoryVisible ? (
               <PanelLeftClose size={18} />
@@ -50,7 +50,7 @@ export function ChatHistoryPanel({
 
       {/* Toolbar con pulsante Nuova Chat */}
       {chatHistoryVisible && (
-        <div className="flex justify-end items-center h-10 px-2 border-b border-editor-border text-editor-foreground">
+        <div className="flex justify-end items-center h-10 px-2 border-b border-editor-border text-white">
           <Tooltip text="Nuova Chat">
             <button
               onClick={onNewChat}
