@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useAIStore } from "../../stores/useAIStore";
+import { ENVIRONMENTS } from "../../stores/environment";
 import { useFileStore } from "../../stores/useFileStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import useEditorStore from "../../store/useEditorStore"; // Assumo che esista
@@ -28,8 +29,15 @@ export function AIPanel() {
     deleteChat,
     deleteMessage, // Recupero la nuova funzione
     stopGeneration, // Nuova funzione per fermare il flusso
+    setChatEnvironment,
     getMessages,
   } = useAIStore();
+
+  // Selettore ottimizzato per ottenere solo la chat corrente
+  const currentChat = useAIStore((state) =>
+    state.conversations.find((c) => c.id === state.currentChatId)
+  );
+  const currentEnvironment = currentChat?.environment || 'web'; // Default a 'web'
 
   const messages = useAIStore((state) => state.getMessages());
 
@@ -69,6 +77,10 @@ export function AIPanel() {
     sendMessage(prompt, context, aiProvider, apiKey, modelToUse); // Passa provider, apiKey e modelToUse
   };
 
+  const handleEnvironmentChange = (e) => {
+    setChatEnvironment(e.target.value);
+  };
+
   const handleDeleteChat = (chatId) => {
     if (window.confirm("Sei sicuro di voler eliminare questa chat?")) {
       deleteChat(chatId);
@@ -92,6 +104,25 @@ export function AIPanel() {
   return (
     // Il pannello della cronologia è stato spostato in App.jsx per un controllo di layout globale.
     <div className="flex flex-col h-full w-full bg-editor-bg text-white">
+      {/* Header con selezione ambiente */}
+      <div className="flex items-center justify-end p-2 border-b border-editor-border h-10 text-xs flex-shrink-0">
+        <label htmlFor="env-select" className="mr-2 text-gray-400">Contesto:</label>
+        <select
+          id="env-select"
+          value={currentEnvironment}
+          onChange={handleEnvironmentChange}
+          disabled={isGenerating}
+          className="bg-editor-highlight border border-editor-border rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          title="Seleziona il contesto di programmazione per l'AI"
+        >
+          {Object.entries(ENVIRONMENTS).map(([key, { label }]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Area Chat Principale */}
       {/* Aggiunto overflow-hidden per forzare il contenitore a rispettare i suoi limiti di altezza,
          permettendo al figlio con overflow-y-auto di funzionare correttamente. */}

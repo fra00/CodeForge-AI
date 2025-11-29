@@ -5,6 +5,7 @@ import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
 import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 
+import { ENVIRONMENTS } from "./environment";
 const stoppingObject = { isStopping: false };
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
@@ -114,13 +115,19 @@ const createNewChat = (id) => ({
   title: "Nuova Chat",
   messages: initialMessages,
   timestamp: new Date().toISOString(),
+  environment: "web", // Default a 'web' per le nuove chat
 });
 
 /**
  * Costruisce il System Prompt Dinamico con regole rafforzate
  */
 const buildSystemPrompt = (context, multiFileTaskState) => {
-  let prompt = `${SYSTEM_PROMPT}
+  const currentChat = useAIStore.getState().conversations.find(c => c.id === useAIStore.getState().currentChatId);
+  // Se la chat non ha un ambiente (vecchie chat), usa 'web' come default.
+  const chatEnvironment = currentChat?.environment || 'web'; 
+  const environmentRules = ENVIRONMENTS[chatEnvironment]?.rules || ''; // Prende le regole o una stringa vuota se l'ambiente non è valido
+
+  let prompt = `${SYSTEM_PROMPT}\n${environmentRules}\n---
 ---
 # 🏛️ PRINCIPIO GUIDA FONDAMENTALE: Problem-Solving
 
@@ -482,6 +489,21 @@ export const useAIStore = create((set, get) => ({
     console.log("[AIStore] Stop generation requested.");
     get().abortController?.abort(); // Attiva il segnale di interruzione
     stoppingObject.isStopping = true; // Imposta il flag di stop
+  },
+
+  /**
+   * Imposta l'ambiente di programmazione per la chat corrente e lo salva.
+   */
+  setChatEnvironment: (environment) => {
+    set((state) => ({
+      conversations: state.conversations.map((chat) =>
+        chat.id === state.currentChatId
+          ? { ...chat, environment }
+          : chat
+      ),
+    }));
+    // Salva immediatamente la conversazione per persistere il cambio di ambiente.
+    get().saveConversation();
   },
 
   saveConversation: async () => {
