@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { FileText, Bot, Settings, MonitorPlay } from "lucide-react";
 import Tooltip from "../ui/Tooltip";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useAIStore } from "../../stores/useAIStore";
 
 /**
  * Componente per la barra laterale di navigazione.
@@ -10,6 +11,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
  */
 export function Sidebar({ activePanel, onPanelChange }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const isGenerating = useAIStore((state) => state.isStreaming);
 
   const navItems = [
     { id: "editor", icon: FileText, label: "Editor" },
@@ -26,7 +28,11 @@ export function Sidebar({ activePanel, onPanelChange }) {
   }
 
   return (
-    <aside className="w-14 bg-editor-darker border-r border-editor-border flex flex-col items-center py-4">
+    <aside
+      className={`w-14 bg-editor-darker border-r border-editor-border flex flex-col items-center py-4 transition-opacity duration-300 ${
+        isGenerating ? "opacity-50 pointer-events-none" : "opacity-100"
+      }`}
+    >
       {/* Main navigation items */}
       <div className="flex flex-col items-center space-y-4">
         {navItems.map((item) => (

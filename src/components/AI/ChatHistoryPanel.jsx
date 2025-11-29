@@ -7,6 +7,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useAIStore } from "../../stores/useAIStore";
 import Tooltip from "../ui/Tooltip";
 
 /**
@@ -20,12 +21,13 @@ export function ChatHistoryPanel({
   onDeleteChat,
 }) {
   const { chatHistoryVisible, toggleChatHistory } = useSettingsStore();
+  const isGenerating = useAIStore((state) => state.isStreaming);
 
   return (
     <aside
-      className={`bg-editor-darker border-r border-editor-border flex flex-col flex-shrink-0 transition-width duration-200 ease-in-out ${
+      className={`bg-editor-darker border-r border-editor-border flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${
         chatHistoryVisible ? "w-64" : "w-10"
-      }`}
+      } ${isGenerating ? "opacity-50 pointer-events-none" : "opacity-100"}`}
     >
       {/* Header con pulsante di collasso */}
       <div className="flex items-center justify-between p-2 border-b border-editor-border h-10">
