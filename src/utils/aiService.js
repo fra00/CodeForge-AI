@@ -38,25 +38,36 @@ export async function getChatCompletion({
   stream = false,
   onChunk = () => {},
   maxTokens = 8192,
+  signal, // Aggiunto il parametro signal
 }) {
-  if (provider === "claude") {
-    return claudeClient.getChatCompletion({
-      messages,
-      apiKey,
-      modelName,
-      stream,
-      onChunk,
-    });
+  try {
+    if (provider === "claude") {
+      return await claudeClient.getChatCompletion({
+        messages,
+        apiKey,
+        modelName,
+        stream,
+        onChunk,
+        signal, // Passato al client Claude
+      });
+    }
+    if (provider === "gemini") {
+      return await geminiClient.getChatCompletion({
+        messages,
+        apiKey,
+        modelName,
+        stream,
+        onChunk,
+        maxTokens,
+        signal, // Passato al client Gemini
+      });
+    }
+    throw new Error(`AI Provider non supportato: ${provider}`);
+  } catch (error) {
+    // Questo è il punto cruciale. Qualsiasi errore catturato dai client
+    // (incluso AbortError) viene intercettato qui e rilanciato.
+    // Questo garantisce che la Promise restituita da questa funzione sia
+    // correttamente rifiutata, permettendo al catch in useAIStore di funzionare.
+    throw error;
   }
-  if (provider === "gemini") {
-    return geminiClient.getChatCompletion({
-      messages,
-      apiKey,
-      modelName,
-      stream,
-      onChunk,
-      maxTokens,
-    });
-  }
-  throw new Error(`AI Provider non supportato: ${provider}`);
 }

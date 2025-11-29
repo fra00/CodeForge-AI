@@ -27,6 +27,7 @@ export function AIPanel() {
     selectChat,
     deleteChat,
     deleteMessage, // Recupero la nuova funzione
+    stopGeneration, // Nuova funzione per fermare il flusso
     getMessages,
   } = useAIStore();
 
@@ -122,7 +123,11 @@ export function AIPanel() {
         )}
 
         {/* Input Prompt */}
-        <PromptInput onSend={handleSendPrompt} isGenerating={isGenerating} />
+        <PromptInput
+          onSend={handleSendPrompt}
+          onStop={stopGeneration}
+          isGenerating={isGenerating}
+        />
       </div>
     </div>
   );

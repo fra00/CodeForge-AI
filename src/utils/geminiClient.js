@@ -64,6 +64,7 @@ export async function getChatCompletion({
   onChunk = () => {},
   responseSchema,
   maxTokens = 8192,
+  signal, // Riceve il signal
 }) {
   if (!apiKey) {
     throw new Error("Gemini API key is not set in settings.");
@@ -86,6 +87,7 @@ export async function getChatCompletion({
         model: modelName,
         contents: geminiMessages,
         config,
+        signal,
       });
 
       for await (const chunk of responseStream) {
@@ -99,6 +101,7 @@ export async function getChatCompletion({
         model: modelName,
         contents: geminiMessages,
         config,
+        signal,
       });
 
       if (response.candidates[0].finishReason.toLowerCase() === "max_tokens") {
@@ -113,8 +116,13 @@ export async function getChatCompletion({
       throw new Error("Gemini API response format error or empty response.");
     }
   } catch (error) {
+    // Se l'errore è un annullamento, non è un vero errore.
+    // Lo rilanciamo silenziosamente per farlo gestire dal chiamante (useAIStore).
+    if (error.name === "AbortError") {
+      throw error;
+    }
+    // Per tutti gli altri errori, li logghiamo e li rilanciamo.
     console.error("Gemini Client Error:", error);
-    // La libreria ufficiale lancia errori più specifici, li rilanciamo.
-    throw error;
+    throw error; // Rilancia l'errore per farlo gestire a un livello superiore
   }
 }

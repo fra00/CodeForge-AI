@@ -5,6 +5,8 @@ import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
 import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 
+const stoppingObject = { isStopping: false };
+
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
 const MAX_AUTO_FIX_ATTEMPTS = 3;
@@ -449,6 +451,7 @@ export const useAIStore = create((set, get) => ({
   error: null,
   multiFileTaskState: null,
   autoFixAttempts: 0,
+  abortController: null, // Per gestire l'annullamento delle chiamate fetch
 
   getMessages: () => {
     const { conversations, currentChatId } = get();
@@ -470,6 +473,15 @@ export const useAIStore = create((set, get) => ({
       console.error("Failed to load AI conversations from IndexedDB:", e);
       set({ conversations: [createNewChat("1")], currentChatId: "1" });
     }
+  },
+
+  /**
+   * Interrompe attivamente la chiamata di rete in corso.
+   */
+  stopGeneration: () => {
+    console.log("[AIStore] Stop generation requested.");
+    get().abortController?.abort(); // Attiva il segnale di interruzione
+    stoppingObject.isStopping = true; // Imposta il flag di stop
   },
 
   saveConversation: async () => {
@@ -1018,12 +1030,26 @@ export const useAIStore = create((set, get) => ({
         addMessage(newUserMessage);
       }
 
-      set({ isStreaming: true, error: null });
+      const controller = new AbortController();
+      set({
+        isStreaming: true,
+        error: null,
+        abortController: controller, // <-- SALVA IL CONTROLLER NELLO STATO
+      });
       const responseSchema = getResponseSchema();
 
       const startFilePath = context.currentFile;
-
+      stoppingObject.isStopping = false; // Reset flag di stop
       while (toolCallCount < maxToolCalls) {
+        if (stoppingObject.isStopping) {
+          console.log("[AIStore] Generation stopped by user.");
+          addMessage({
+            id: Date.now().toString(),
+            role: "status",
+            content: "⚠️ Generation stopped by user.",
+          });
+          break;
+        }
         // 🛑 LOGICA SEMPLIFICATA
         if (startFilePath && startFilePath !== "none") {
           // FIX: Usa Object.values() per iterare correttamente l'oggetto files
@@ -1071,6 +1097,7 @@ export const useAIStore = create((set, get) => ({
           messages: messagesForLLM,
           stream: false,
           responseSchema,
+          signal: controller.signal, // Passa il signal per l'annullamento
           maxTokens: 8192,
         });
 
@@ -1184,15 +1211,26 @@ export const useAIStore = create((set, get) => ({
         });
       }
     } catch (e) {
-      console.error("Error in AI conversation:", e);
-      set({ error: e.message });
-      addMessage({
-        id: Date.now().toString(),
-        role: "assistant",
-        content: `❌ Error: ${e.message}`,
-      });
+      // Controlla se l'errore è dovuto all'annullamento da parte dell'utente
+      if (e.name === "AbortError") {
+        console.log("Fetch aborted by user.");
+        addMessage({
+          id: Date.now().toString(),
+          role: "status",
+          content: "⏹️ Generation stopped by user.",
+        });
+      } else {
+        // Gestisce tutti gli altri errori
+        console.error("Error in AI conversation:", e);
+        set({ error: e.message });
+        addMessage({
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `❌ Error: ${e.message}`,
+        });
+      }
     } finally {
-      set({ isStreaming: false });
+      set({ isStreaming: false, abortController: null });
       await get().saveConversation();
     }
   },

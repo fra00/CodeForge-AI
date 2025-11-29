@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Send, Zap } from "lucide-react";
+import { Send, Loader2, StopCircle } from "lucide-react";
 import Textarea from "../ui/Textarea";
 import Button from "../ui/Button";
 
@@ -8,7 +8,7 @@ import Button from "../ui/Button";
  * Componente per l'input del prompt dell'AI Assistant.
  * Include auto-resize e gestione di Ctrl+Enter per l'invio.
  */
-export function PromptInput({ onSend, isGenerating }) {
+export function PromptInput({ onSend, onStop, isGenerating }) {
   const [prompt, setPrompt] = useState("");
   const textareaRef = useRef(null);
 
@@ -53,13 +53,31 @@ export function PromptInput({ onSend, isGenerating }) {
           ref={textareaRef} // Passa il ref alla textarea interna
           className="flex-1 resize-none max-h-40"
         />
-        <Button
-          onClick={handleSend}
-          disabled={!prompt.trim() || isGenerating}
-          className="ml-3 h-10 w-10 flex-shrink-0"
-        >
-          <Send size={20} />
-        </Button>
+        <div className="ml-3 flex flex-col items-center">
+          {isGenerating && (
+            <Button
+              onClick={onStop}
+              className="h-10 w-10 mb-2 flex-shrink-0 flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/40"
+            >
+              <span>
+                <StopCircle size={20} />
+              </span>
+            </Button>
+          )}
+          <Button
+            onClick={handleSend}
+            disabled={isGenerating || !prompt.trim()}
+            className="h-10 w-10 flex-shrink-0 flex items-center justify-center"
+          >
+            <span>
+              {isGenerating ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Send size={20} />
+              )}
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -67,5 +85,6 @@ export function PromptInput({ onSend, isGenerating }) {
 
 PromptInput.propTypes = {
   onSend: PropTypes.func.isRequired,
+  onStop: PropTypes.func.isRequired,
   isGenerating: PropTypes.bool.isRequired,
 };
