@@ -4,6 +4,7 @@
 - optimize prompt (sometime not read file, update file also when not called)
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
+- add an executution plan before start coding and add message summary execution
 
 - 20251129
   x LLM expert of Javascript , c# , arduino , different language
