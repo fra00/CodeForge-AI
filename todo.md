@@ -4,7 +4,7 @@
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
 - add an executution plan before start coding and add message summary execution
-
+- use react
 
   x add structure of folder/files to prompt
   x optimize prompt (sometime not read file, update file also when not called)
