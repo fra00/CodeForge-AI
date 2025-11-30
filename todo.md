@@ -1,13 +1,14 @@
 - every N call minimize context to minime use of token , minimize and optimize token
 - read console for error after finish insert/modify file
 - 2WHAV area?
-- optimize prompt (sometime not read file, update file also when not called)
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
 - add an executution plan before start coding and add message summary execution
 - read error from console (fix)
-- add structure of folder/files to prompt
 
+  x add structure of folder/files to prompt
+  x optimize prompt (sometime not read file, update file also when not called)
+  x open live preview in new popup
 
 - 20251129
   x LLM expert of Javascript , c# , arduino , different language

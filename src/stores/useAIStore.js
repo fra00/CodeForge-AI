@@ -129,7 +129,18 @@ const buildSystemPrompt = (context, multiFileTaskState) => {
   const chatEnvironment = currentChat?.environment || "web";
   const environmentRules = ENVIRONMENTS[chatEnvironment]?.rules || ""; // Prende le regole o una stringa vuota se l'ambiente non è valido
 
-  let prompt = `${SYSTEM_PROMPT}\n${environmentRules}\n---
+  const fileStore = useFileStore.getState();
+  const filePaths = Object.values(fileStore.files)
+    .filter((node) => node.id !== fileStore.rootId && !node.isFolder)
+    .map((node) => node.path)
+    .sort();
+
+  const projectStructure = `
+# 📁 STRUTTURA DEL PROGETTO (Solo File)
+${filePaths.join("\n")}
+`;
+
+  let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${environmentRules}\n---
 ---
 Indice contenuti:
 1. 🧠 Decision Protocol: Problem-Solving
