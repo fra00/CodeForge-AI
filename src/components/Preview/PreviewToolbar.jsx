@@ -17,7 +17,16 @@ export function PreviewToolbar({
   onRefresh,
   onViewportChange,
   currentViewport,
+  srcDoc,
 }) {
+  const handleOpenInNewWindow = () => {
+    const newWindow = window.open("", "LivePreview", "width=800,height=600,resizable=yes,scrollbars=yes");
+    if (newWindow) {
+      newWindow.document.write(srcDoc);
+      newWindow.document.close();
+    }
+  };
+
   const viewportOptions = [
     { value: "desktop", label: "Desktop" },
     { value: "tablet", label: "Tablet" },
@@ -64,7 +73,7 @@ export function PreviewToolbar({
 
         {/* Open in New Window (Placeholder) */}
         <Button
-          onClick={() => alert("Funzionalità non ancora implementata.")}
+          onClick={handleOpenInNewWindow}
           variant="ghost"
           size="small"
           title="Apri in Nuova Finestra"
@@ -82,4 +91,5 @@ PreviewToolbar.propTypes = {
   onViewportChange: PropTypes.func.isRequired,
   currentViewport: PropTypes.oneOf(["desktop", "tablet", "mobile", "full"])
     .isRequired,
+  srcDoc: PropTypes.string.isRequired,
 };

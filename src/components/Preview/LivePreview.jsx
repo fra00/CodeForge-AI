@@ -83,7 +83,7 @@ export function LivePreview({ className = "" }) {
 
   return (
     <div className={`flex flex-col h-full w-full bg-editor-bg ${className}`}>
-      <PreviewToolbar onRefresh={() => (iframeRef.current.srcdoc = srcDoc)} />
+      <PreviewToolbar onRefresh={() => (iframeRef.current.srcdoc = srcDoc)} srcDoc={srcDoc} />
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}
