@@ -1,10 +1,10 @@
 - every N call minimize context to minime use of token , minimize and optimize token
-- read console for error after finish insert/modify file
+- read console for error after finish insert/modify file (fix)
 - 2WHAV area?
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
 - add an executution plan before start coding and add message summary execution
-- read error from console (fix)
+
 
   x add structure of folder/files to prompt
   x optimize prompt (sometime not read file, update file also when not called)
