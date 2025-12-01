@@ -7,9 +7,21 @@ export const ENVIRONMENTS = {
     label: "Web (HTML/CSS/JS)",
     rules: `
 # WEB DEVELOPMENT CONTEXT RULES
-- You are an expert in modern web development (HTML, CSS, JavaScript/TypeScript, React).
+- You are an expert in modern web development (HTML, CSS, JavaScript/TypeScript).
 - Assume a modern browser environment with support for ES6+ features.
 - For styling, prefer Tailwind CSS if not specified otherwise.
+    `,
+  },
+  react: {
+    label: "React (JSX/TSX)",
+    rules: `
+# REACT CONTEXT RULES
+- You are an expert in modern React (Hooks, Functional Components).
+- **CRITICAL:** Assume the environment supports JSX/TSX compilation and React runtime.
+- For UI elements, DEVI importare e usare i componenti dal percorso \`src/components/ui/\`.
+- **CRITICAL:** Usa ESCLUSIVAMENTE la sintassi \`import/export\` per le dipendenze tra file. NON usare \`require()\` (CommonJS) in nessun file.
+- **CRITICAL:** In \`index.html\`, DEVI includere il tag \`<script type="module" src="/src/main.jsx"></script>\` (o il tuo entry point) nel \`<body>\`. Questo è necessario per il sistema di Live Preview.
+- NON includere altri tag \`<script>\` o \`<link>\` esterni. Il sistema gestisce il runtime e le dipendenze.
     `,
   },
   csharp: {

@@ -17,16 +17,9 @@ export function PreviewToolbar({
   onRefresh,
   onViewportChange,
   currentViewport,
-  srcDoc,
+  onOpenInNewWindow,
+  isWindowOpen,
 }) {
-  const handleOpenInNewWindow = () => {
-    const newWindow = window.open("", "LivePreview", "width=800,height=600,resizable=yes,scrollbars=yes");
-    if (newWindow) {
-      newWindow.document.write(srcDoc);
-      newWindow.document.close();
-    }
-  };
-
   const viewportOptions = [
     { value: "desktop", label: "Desktop" },
     { value: "tablet", label: "Tablet" },
@@ -71,13 +64,14 @@ export function PreviewToolbar({
           <RefreshCw size={16} />
         </Button>
 
-        {/* Open in New Window (Placeholder) */}
+        {/* Open in New Window */}
         <Button
-          onClick={handleOpenInNewWindow}
+          onClick={onOpenInNewWindow}
           variant="ghost"
           size="small"
           title="Apri in Nuova Finestra"
           className="p-1"
+          disabled={isWindowOpen}
         >
           <ExternalLink size={16} />
         </Button>
@@ -91,5 +85,6 @@ PreviewToolbar.propTypes = {
   onViewportChange: PropTypes.func.isRequired,
   currentViewport: PropTypes.oneOf(["desktop", "tablet", "mobile", "full"])
     .isRequired,
-  srcDoc: PropTypes.string.isRequired,
+  onOpenInNewWindow: PropTypes.func.isRequired,
+  isWindowOpen: PropTypes.bool.isRequired,
 };
