@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { initDB, getAll, put, remove, clear } from "../utils/indexedDB";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import { analyzeCodeStructure } from "../utils/analyzeCode";
 
 // --- Initial State & Constants ---
 const FILES_STORE_NAME = "files";
@@ -242,7 +243,7 @@ export const useFileStore = create((set, get) => ({
             isDirty: false,
             isNew: false,
           };
-            
+
           // 3. Aggiorna il parent del nodo appena salvato
           const parent = newFiles[file.parentId];
           if (parent) {
@@ -260,7 +261,7 @@ export const useFileStore = create((set, get) => ({
 
           // 5. CORREZIONE: Se il nodo era una cartella, aggiorna il parentId dei suoi figli
           if (oldNode && oldNode.isFolder && oldNode.children) {
-            oldNode.children.forEach(childId => {
+            oldNode.children.forEach((childId) => {
               const childNode = newFiles[childId];
               if (childNode) {
                 newFiles[childId] = { ...childNode, parentId: newIdStr };
@@ -331,8 +332,7 @@ export const useFileStore = create((set, get) => ({
     const newNode = {
       id: newId,
       name,
-      path:
-        (parent.path === "/" ? "" : parent.path) + "/" + name,
+      path: (parent.path === "/" ? "" : parent.path) + "/" + name,
       isFolder,
       content: isFolder ? "" : content,
       language: isFolder ? "" : "text", // Lingua di default, verrà aggiornata da languageDetector
@@ -362,7 +362,7 @@ export const useFileStore = create((set, get) => ({
     if (!isFolder) {
       get().openFile(newId);
     }
-    
+
     return newNode;
   },
 
@@ -527,7 +527,9 @@ export const useFileStore = create((set, get) => ({
       return { message: `✓ File ${fullPath} updated (already existed)` };
     }
     if (existingNode && existingNode.isFolder) {
-      throw new Error(`Cannot create file ${fullPath}, a folder with the same name exists.`);
+      throw new Error(
+        `Cannot create file ${fullPath}, a folder with the same name exists.`
+      );
     }
 
     const parts = fullPath.split("/").filter(Boolean);
@@ -582,7 +584,9 @@ export const useFileStore = create((set, get) => ({
       try {
         if (actionType === "create_file") {
           const result = _createNodeFromPath(normalizedPath, content);
-          results.push(result.message);
+          // results.push(result.message);
+          // results.push("content: '" + content + "'");
+          results.push("content: '" + content + "'");
         } else if (actionType === "update_file") {
           // ✅ UPDATE: Solo se esiste già
           const existingNode = findNodeByPath(state.files, normalizedPath);
@@ -600,7 +604,8 @@ export const useFileStore = create((set, get) => ({
           }
 
           updateFileContent(existingNode.id, content);
-          results.push(`✓ File ${normalizedPath} updated`);
+          // results.push(`✓ File ${normalizedPath} updated`);
+          results.push("content: '" + content + "'");
         } else if (actionType === "delete_file") {
           // ✅ DELETE: Elimina se esiste
           const existingNode = findNodeByPath(state.files, normalizedPath);
@@ -875,7 +880,9 @@ export const useFileStore = create((set, get) => ({
         await Promise.all(filePromises);
       } catch (error) {
         console.error("Error importing project from ZIP:", error);
-        alert("Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto.");
+        alert(
+          "Errore durante l'importazione del progetto. Il file ZIP potrebbe essere corrotto."
+        );
       }
     } catch (error) {
       console.error("Critical error during import operation:", error);

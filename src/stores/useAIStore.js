@@ -4,7 +4,8 @@ import { getChatCompletion } from "../utils/aiService";
 import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
 import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
-import { buildSystemPrompt, SYSTEM_PROMPT } from "./systemPrompt";
+import { buildSystemPrompt, SYSTEM_PROMPT } from "./ai/systemPrompt";
+import { getResponseSchema } from "./ai/responseSchema";
 
 import { ENVIRONMENTS } from "./environment";
 const stoppingObject = { isStopping: false };
@@ -107,93 +108,6 @@ const createNewChat = (id) => ({
   messages: initialMessages,
   timestamp: new Date().toISOString(),
   environment: "web", // Default a 'web' per le nuove chat
-});
-
-/**
- * Schema JSON per la validazione (incluso 'paths' array)
- */
-const getResponseSchema = () => ({
-  type: "object",
-  properties: {
-    action: {
-      type: "string",
-      enum: [
-        "create_file",
-        "update_file",
-        "delete_file",
-        "text_response",
-        "tool_call",
-        "start_multi_file",
-        "continue_multi_file",
-      ],
-    },
-    files: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          path: { type: "string" },
-          content: { type: "string" },
-        },
-        required: ["path"],
-      },
-    },
-    file: {
-      type: "object",
-      properties: {
-        path: { type: "string" },
-        content: { type: "string" },
-      },
-      required: ["path"],
-    },
-    text_response: { type: "string" },
-    message: { type: "string" },
-    tool_call: {
-      type: "object",
-      properties: {
-        function_name: {
-          type: "string",
-          enum: ["list_files", "read_file"],
-        },
-        args: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-            paths: { type: "array", items: { type: "string" } }, // Batch support
-          },
-        },
-      },
-      required: ["function_name", "args"],
-    },
-    plan: {
-      type: "object",
-      properties: {
-        description: { type: "string" },
-        files_to_modify: { type: "array", items: { type: "string" } },
-      },
-    },
-    first_file: {
-      type: "object",
-      properties: {
-        action: { type: "string" },
-        file: {
-          type: "object",
-          properties: { path: { type: "string" }, content: { type: "string" } },
-        },
-      },
-    },
-    next_file: {
-      type: "object",
-      properties: {
-        action: { type: "string" },
-        file: {
-          type: "object",
-          properties: { path: { type: "string" }, content: { type: "string" } },
-        },
-      },
-    },
-  },
-  required: ["action"],
 });
 
 export const useAIStore = create((set, get) => ({
@@ -465,57 +379,6 @@ export const useAIStore = create((set, get) => ({
   },
 
   /**
-   * Gestisce la logica per le azioni sul VFS (create, update, delete).
-   * @returns {Promise<boolean>} True se il loop deve continuare (per auto-debug).
-   * @private
-   */
-  _handleVFSAction: async (action, file) => {
-    const { addMessage } = get();
-    const fileStore = useFileStore.getState();
-
-    // Validazione
-    if (!file || typeof file !== "object") {
-      addMessage({
-        id: `${Date.now()}-err`,
-        role: "user",
-        content: `❌ Error: Action '${action}' requires a 'file' object.`,
-      });
-      return true; // Forza Retry immediato
-    }
-    if (
-      !file.path ||
-      typeof file.path !== "string" ||
-      file.path.trim() === ""
-    ) {
-      addMessage({
-        id: `${Date.now()}-path-err`,
-        role: "user",
-        content: `❌ CRITICAL ERROR: You attempted '${action}' without specifying "path".`,
-      });
-      return true; // Forza Retry immediato
-    }
-
-    let results;
-    try {
-      results = fileStore.applyFileActions([file], action);
-    } catch (e) {
-      results = [`Error: ${e.message}`];
-    }
-
-    const resultText =
-      results.length > 0
-        ? results.map((r) => `• ${r}`).join("\n")
-        : "Files processed successfully.";
-    addMessage({
-      id: `${Date.now()}-vfs-status`,
-      role: "status", // Ruolo di stato per non inquinare la cronologia AI
-      content: `Action: ${action}\n${resultText}`,
-    });
-
-    return await get()._checkForRuntimeErrors();
-  },
-
-  /**
    * Gestisce la logica per una chiamata a un tool (list_files, read_file).
    * @returns {Promise<boolean>} Sempre true per continuare il loop.
    * @private
@@ -533,7 +396,7 @@ export const useAIStore = create((set, get) => ({
 
     addMessage({
       id: `${Date.now()}-tool-status`,
-      role: "status", // Ruolo speciale per messaggi di stato, non inviati all'AI
+      role: "file-status", // Ruolo speciale per messaggi di stato, non inviati all'AI
       content: `Executing: ${tool_call.function_name} ${logArgs}`,
     });
 
@@ -603,7 +466,7 @@ export const useAIStore = create((set, get) => ({
       );
       addMessage({
         id: `${Date.now()}-res`,
-        role: "status", // Ruolo di stato per non inquinare la cronologia AI
+        role: "file-status", // Ruolo di stato per non inquinare la cronologia AI
         content: results.join("\n") || "First file action completed.",
       });
 
@@ -662,7 +525,7 @@ export const useAIStore = create((set, get) => ({
       );
       addMessage({
         id: `${Date.now()}-res`,
-        role: "status", // Ruolo di stato per non inquinare la cronologia AI
+        role: "file-status", // Ruolo di stato per non inquinare la cronologia AI
         content: results.join("\n") || "Action completed.",
       });
 
@@ -709,25 +572,33 @@ export const useAIStore = create((set, get) => ({
       message,
     } = jsonObject;
 
+    let shouldContinue = false; // Default: non continuare il loop.
     if (action === "text_response") {
-      return await get()._handleTextResponse(text_response);
+      shouldContinue = await get()._handleTextResponse(text_response);
+      return true; // Dopo una risposta testuale, continua per eventuali altre azioni
+    } else if (action === "tool_call" && tool_call) {
+      shouldContinue = await get()._handleToolCall(tool_call);
+      return true; // Dopo una chiamata a tool, continua per eventuali altre azioni
+    } else if (action === "start_multi_file" && plan && first_file) {
+      shouldContinue = await get()._handleStartMultiFile(
+        plan,
+        first_file,
+        message
+      );
+    } else if (action === "continue_multi_file" && next_file) {
+      shouldContinue = await get()._handleContinueMultiFile(next_file, message);
+    } else {
+      // Se nessuna azione corrisponde, aggiungi un messaggio di errore e interrompi
+      console.warn("Unhandled action type:", action, jsonObject);
+      get().addMessage({
+        id: Date.now().toString(),
+        role: "user", // Lo presentiamo come un errore di sistema che l'AI deve vedere
+        content: `[SYSTEM-ERROR] The action '${action}' is not a valid or recognized action. Please review the available actions and correct your response.`,
+      });
+      shouldContinue = false; // Non continuare
     }
-    if (["create_file", "update_file", "delete_file"].includes(action)) {
-      return await get()._handleVFSAction(action, file);
-    }
-    if (action === "tool_call" && tool_call) {
-      return await get()._handleToolCall(tool_call);
-    }
-    if (action === "start_multi_file" && plan && first_file) {
-      return await get()._handleStartMultiFile(plan, first_file, message);
-    }
-    if (action === "continue_multi_file" && next_file) {
-      return await get()._handleContinueMultiFile(next_file, message);
-    }
-
-    // Se nessuna azione corrisponde, interrompi per sicurezza
-    console.warn("Unhandled action type:", action);
-    return Promise.resolve(false);
+    shouldContinue = await get()._checkForRuntimeErrors();
+    return shouldContinue;
   },
 
   /**
@@ -739,7 +610,7 @@ export const useAIStore = create((set, get) => ({
     provider,
     apiKey,
     modelName,
-    maxToolCalls = 10
+    maxToolCalls = 20
   ) => {
     const { addMessage, currentChatId } = get();
     const fileStore = useFileStore.getState();
@@ -974,29 +845,42 @@ export const useAIStore = create((set, get) => ({
         addMessage({
           id: Date.now().toString(),
           role: "assistant",
-          content: "⚠️ Operation limit reached.",
+          content: `⚠️ Operation count limit reached ${maxToolCalls} calls.`,
         });
       }
     } catch (e) {
-      // Controlla se l'errore è dovuto all'annullamento da parte dell'utente
-      if (e.name === "AbortError") {
-        console.log("Fetch aborted by user.");
-        addMessage({
-          id: Date.now().toString(),
-          role: "status",
-          content: "⏹️ Generation stopped by user.",
-        });
-      } else {
-        // Gestisce tutti gli altri errori
-        console.error("Error in AI conversation:", e);
-        set({ error: e.message });
-        addMessage({
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `❌ Error: ${e.message}`,
-        });
-      }
+      // Gestisce tutti gli altri errori
+      console.error("Error in AI conversation:", e);
+      set({ error: e.message });
+      addMessage({
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `❌ Error: ${e.message}`,
+      });
     } finally {
+      set((state) => {
+        const newConversations = state.conversations.map((chat) => {
+          if (chat.id === state.currentChatId) {
+            const updatedMessages = chat.messages.map((msg) => {
+              // Trasforma 'file-status' e 'content' in 'status'
+              if (msg.role === "file-status" || msg.role === "content") {
+                return { ...msg, role: "status" };
+              }
+              // Trasforma anche i risultati dei tool in messaggi di stato
+              if (
+                msg.role === "user" &&
+                msg.content.startsWith("[Tool Result]")
+              ) {
+                return { ...msg, role: "status" };
+              }
+              return msg;
+            });
+            return { ...chat, messages: updatedMessages };
+          }
+          return chat;
+        });
+        return { conversations: newConversations };
+      });
       set({ isStreaming: false, abortController: null });
       await get().saveConversation();
     }

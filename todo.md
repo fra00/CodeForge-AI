@@ -6,6 +6,7 @@
 - refactor useAiStore
 - add an executution plan before start coding and add message summary execution
 - preview with full height
+- remove multi file , use only simple action, is alwais multi file
 
 - 20251201
   x use react
