@@ -215,8 +215,8 @@ export function LivePreview({ className = "" }) {
             {/* La soluzione corretta è usare la variabile CSS che Sandpack espone per il layout.
                 Questo forza il layout a prendere il 100% dell'altezza del suo contenitore genitore (il div con flex-1). */}
 
-            {/* <SandpackLayout style={{ "--sp-layout-height": "100%" }}> */}
-            <SandpackLayout>
+            {/* Applica l'altezza del 100% tramite la variabile CSS nativa di Sandpack. */}
+            <SandpackLayout style={{ "--sp-layout-height": "400px" }}>
               {PreviewComponent}
               <SandpackLogInterceptor onLog={handleLog} />
             </SandpackLayout>
