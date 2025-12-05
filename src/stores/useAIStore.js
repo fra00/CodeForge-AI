@@ -327,6 +327,12 @@ export const useAIStore = create((set, get) => ({
         role: "user", // Lo presentiamo come un input di sistema per l'AI
         content: systemErrorMessage,
       });
+
+      // Pulisci la console per evitare di rileggere lo stesso errore.
+      if (typeof window.clearProjectConsole === "function") {
+        window.clearProjectConsole();
+      }
+
       return true; // Continua il loop di sendMessage per la correzione
     }
 
@@ -469,7 +475,8 @@ export const useAIStore = create((set, get) => ({
         },
       }));
 
-      return await get()._checkForRuntimeErrors();
+      return true;
+      // return await get()._checkForRuntimeErrors();
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -706,13 +713,17 @@ export const useAIStore = create((set, get) => ({
           fileStore
         );
 
-        // 🛡️ FILTRO API: Rimuove messaggi vuoti dalla history prima di inviare
+        // Filtra i messaggi non utili per l'AI e prendi solo gli ultimi 20
+        const recentHistory = conversationHistory
+          // 🛡️ FILTRO API: Rimuove messaggi di sistema e di stato
+          .filter((m) => m.role !== "system" && m.role !== "status")
+          .filter((m) => m.content && m.content.toString().trim().length > 0)
+          .slice(-20); // Prendi solo gli ultimi 20 messaggi
+
+        // Prepara il payload finale per l'API
         const messagesForLLM = [
           { role: "system", content: systemPromptWithContext },
-          ...conversationHistory
-            // 🛡️ FILTRO API: Rimuove messaggi di sistema e di stato
-            .filter((m) => m.role !== "system" && m.role !== "status")
-            .filter((m) => m.content && m.content.toString().trim().length > 0),
+          ...recentHistory,
         ];
 
         // Chiamata LLM

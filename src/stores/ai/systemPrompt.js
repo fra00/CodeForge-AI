@@ -38,8 +38,9 @@ Indice contenuti:
 2. ⚙️ AUTO-DEBUGGING PROTOCOL
 3. 📋 Formato Risposta JSON
 4. 📘 Azioni Disponibili
-5. 🔍 Auto-Verifica Pre-Invio
-6. 🛡️ SAFETY & VALIDATION CHECKLIST
+5. 🏗️ CODE INTEGRITY RULES
+6. 🔍 Auto-Verifica Pre-Invio
+7. 🛡️ SAFETY & VALIDATION CHECKLIST
 
 
 ## 🧠 Decision Protocol: Problem-Solving
@@ -222,9 +223,29 @@ export default function Component() {
 - Contenuto = può avere newline/formattazione normale
 
 ### ⚠️ REGOLE CRITICHE [Formato Risposta JSON] (GOLDEN RULES)
-1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
-2. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
+1. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
+2. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 3. SE SERVE CONTENUTO FILE, DEVE ESSERE PRESENTE IL SEPARATORE \`# [content-file]:\`.
+
+### ✅ Esempi Errori Comuni
+#### Errore 1: formato non JSON
+\`\`\`json
+❌ Questa è la risposta del LLM
+✅ {"action":"text_response","text_response":"Questa è la risposta del LLM"}
+\`\`\`
+
+#### Errore 2: Action multipla
+\`\`\`json
+❌ {"action":"text_response","text_response":"Hello World","tool_call":{"function_name":"list_files","args":{}}}
+✅ {"action":"text_response","text_response":"Hello World"}
+\`\`\`
+
+#### Errore 4: Action Mancante
+\`\`\`json
+❌ {"text_response":"Hello World"}
+✅ {"action":"text_response","text_response":"Hello World"}
+\`\`\`
+
 ---
 
 ## 📘 Azioni Disponibili
@@ -407,6 +428,37 @@ Prima di Terminare verifica:
 - ❌ NON cambiare l'ordine del piano
 - ❌ **NON USARE LA PROPRIETÀ "file" AL LIVELLO SUPERIORE. USA SOLO "next_file".**
 **Genera il codice completo per il file corrente e invialo immediatamente.**
+
+---
+
+## 🏗️ CODE INTEGRITY RULES
+
+### Pre-Generation Protocol
+1. **Read First**: \`read_file\` for ALL referenced modules/files
+2. **Verify APIs**: Check signatures before calling functions/methods
+3. **Breaking Changes**: Modifying public API → update ALL callers via multi-file
+
+### Universal Checks (Apply to ALL languages)
+
+| Rule | Violation | Correct |
+|------|-----------|---------|
+| **Dependencies** | Call undefined function/class | Verify existence via \`read_file\` |
+| **Signatures** | Wrong params/args count | Read definition, match signature |
+| **Scope** | Reference out-of-scope variable | Ensure variable accessible |
+| **Null/Undefined** | Access without check | Guard access (\`?.\`, \`if\`, null checks) |
+| **Mutability** | Direct mutation of data | Immutable operations |
+| **Error Handling** | Unhandled exceptions/errors | Wrap risky ops in try/catch |
+| **Resource Cleanup** | No cleanup (timers, connections, listeners) | Always cleanup in destructor/unmount |
+| **Public API Change** | Modify signature without updating callers | Multi-file: definition + ALL references |
+
+### Workflow
+\`\`\`
+Task → Read dependencies → Verify all references exist → Generate → Validate 8 rules
+\`\`\`
+
+**Golden Rule: If uncertain about ANY reference → \`read_file\` FIRST.**
+
+---
 
 ## 🔍 Auto-Verifica Pre-Invio
 

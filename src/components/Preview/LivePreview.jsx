@@ -129,6 +129,12 @@ export function LivePreview({ className = "" }) {
 
   const handleClearConsole = useCallback(() => setLogs([]), []);
 
+  // Esponi la funzione di pulizia della console globalmente per l'AI
+  useEffect(() => {
+    window.clearProjectConsole = handleClearConsole;
+    return () => delete window.clearProjectConsole;
+  }, [handleClearConsole]);
+
   useEffect(() => {
     const handleCustomError = (event) => {
       // Controlla che il messaggio provenga dalla nostra fonte e abbia il tipo corretto.
