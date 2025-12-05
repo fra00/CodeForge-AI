@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useFileStore } from "../../stores/useFileStore";
 import { useAIStore } from "../../stores/useAIStore";
+import errorCatcherCode from "./error-catcher.js?raw"; // Importa il codice come stringa
 import { ConsolePanel } from "./Console";
 import {
   SandpackProvider,
@@ -58,12 +59,36 @@ const SandpackLogInterceptor = ({ onLog }) => {
   useEffect(() => {
     // listen() ci permette di ascoltare i messaggi dal bundler/iframe
     const unsubscribe = listen((msg) => {
-      if (msg.type === "console" && msg.log) {
+      // 🛡️ GUARDIA DI ROBUSTEZZA:
+      // Filtra solo i veri messaggi di console, ignorando gli eventi interni di Sandpack
+      // che possono avere type: 'console' ma method non validi (es. 'u' per unmount).
+      const validConsoleMethods = ["log", "error", "warn", "info", "debug"];
+
+      if (
+        msg.type === "console" &&
+        msg.log &&
+        validConsoleMethods.includes(msg.log.method)
+      ) {
         // msg.log contiene { method: 'log'|'error', data: [...] }
         onLog({
           type: msg.log.method,
           // Aggiungiamo un fallback a un array vuoto per evitare crash se msg.log.data è undefined
-          data: (msg.log.data || []).map((d) => String(d)),
+          data: (msg.log.data || []).map((d) =>
+            d === undefined ? "undefined" : String(d)
+          ),
+          timestamp: new Date().toISOString(),
+        });
+      } else if (
+        (msg.type === "action" && msg.action === "show-error" && msg.payload) ||
+        (msg.type === "error" && msg.error)
+      ) {
+        // --- GESTIONE ERRORI DI RUNTIME ---
+        // Cattura sia gli errori inviati come 'action' (es. ReferenceError)
+        // sia quelli inviati come 'error'.
+        const errorPayload = msg.payload || msg.error;
+        onLog({
+          type: "error", // Classifichiamo come un errore
+          data: [errorPayload.title || errorPayload.message],
           timestamp: new Date().toISOString(),
         });
       }
@@ -88,17 +113,8 @@ export function LivePreview({ className = "" }) {
   // Usiamo questa key SOLO per il pulsante "Refresh" manuale, non per ogni tasto premuto
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // State to manage the external window
-  const [isWindowOpen, setIsWindowOpen] = useState(false);
-
-  const handleClearConsole = useCallback(() => setLogs([]), []);
-
-  // Conversione memoizzata
-  const sandpackFiles = useMemo(() => {
-    return convertVfsToSandpackFiles(vfsFiles, rootId);
-  }, [vfsFiles, rootId]);
-
-  // Gestione Logs
+  // --- LISTENER PER L'ERROR CATCHER ---
+  // La dichiarazione di handleLog deve precedere il suo utilizzo nell'useEffect.
   const handleLog = useCallback((logItem) => {
     setLogs((prev) => [...prev, logItem]);
 
@@ -110,6 +126,54 @@ export function LivePreview({ className = "" }) {
       window.handleIframeError(logItem.data.join(" "));
     }
   }, []);
+
+  const handleClearConsole = useCallback(() => setLogs([]), []);
+
+  useEffect(() => {
+    const handleCustomError = (event) => {
+      // Controlla che il messaggio provenga dalla nostra fonte e abbia il tipo corretto.
+      if (event.data && event.data.type === "custom-sandpack-error") {
+        const errorPayload = event.data.payload;
+        handleLog({
+          type: "error",
+          data: [errorPayload.message],
+          timestamp: new Date().toISOString(),
+        });
+      }
+    };
+
+    window.addEventListener("message", handleCustomError);
+    return () => window.removeEventListener("message", handleCustomError);
+  }, [handleLog]); // handleLog è wrappato in useCallback, quindi è sicuro.
+
+  // State to manage the external window
+  const [isWindowOpen, setIsWindowOpen] = useState(false);
+
+  // Conversione memoizzata
+  const sandpackFiles = useMemo(() => {
+    const files = convertVfsToSandpackFiles(vfsFiles, rootId);
+
+    // --- INIEZIONE ROBUSTA DELL'ERROR CATCHER ---
+    // Lo facciamo qui per assicurarci che venga ricalcolato ogni volta che i file cambiano.
+    files["/error-catcher.js"] = { code: errorCatcherCode, hidden: true };
+
+    // Se index.html esiste, iniettiamo lo script.
+    if (files["/index.html"]) {
+      const bodyTagRegex = /<body.*?>/i; // Regex per trovare <body>, <BODY>, <body class="...">, etc.
+
+      // Evita iniezioni multiple se il codice è già presente
+      if (
+        !files["/index.html"].code.includes('src="/error-catcher.js"') &&
+        bodyTagRegex.test(files["/index.html"].code)
+      ) {
+        files["/index.html"].code = files["/index.html"].code.replace(
+          bodyTagRegex,
+          (match) => `${match}\n    <script src="/error-catcher.js"></script>`
+        );
+      }
+    }
+    return files;
+  }, [vfsFiles, rootId]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
@@ -139,11 +203,9 @@ export function LivePreview({ className = "" }) {
       files: sandpackFiles,
       template: template,
       theme: sandpackDark,
-      options: {
-        autoReload: true,
-      },
+      options: { autoReload: true },
     }),
-    [sandpackFiles, template]
+    [sandpackFiles, template, handleLog]
   );
 
   // 2. Define the content for the Popup
@@ -151,6 +213,7 @@ export function LivePreview({ className = "" }) {
   const PopupContent = (
     <div className="h-screen w-screen flex flex-col bg-gray-900">
       <SandpackProvider {...sandpackProps}>
+        {/* Le props comuni (incluso il template) vengono passate qui */}
         <SandpackLayout className="flex-1 h-full w-full">
           <SandpackPreview
             className="h-full w-full"
@@ -158,7 +221,10 @@ export function LivePreview({ className = "" }) {
             showRefreshButton={true} // Show refresh button in popup
             showNavigator={true}
           />
-          {/* Also add the interceptor here if you want logs from the popup */}
+          {/*
+            Aggiungiamo l'intercettore anche qui per catturare i console.log
+            generati dalla finestra popup.
+          */}
           <SandpackLogInterceptor onLog={handleLog} />
         </SandpackLayout>
       </SandpackProvider>
@@ -218,6 +284,11 @@ export function LivePreview({ className = "" }) {
             {/* Applica l'altezza del 100% tramite la variabile CSS nativa di Sandpack. */}
             <SandpackLayout style={{ "--sp-layout-height": "400px" }}>
               {PreviewComponent}
+              {/*
+                Questo intercetta i console.log e alcuni errori.
+                onUncaughtError su SandpackPreview cattura gli altri.
+                Usandoli entrambi abbiamo la massima copertura.
+              */}
               <SandpackLogInterceptor onLog={handleLog} />
             </SandpackLayout>
           </SandpackProvider>

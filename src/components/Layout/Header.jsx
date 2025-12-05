@@ -13,7 +13,7 @@ export function Header({ onNewProject, onImport, onExport, onOpenSettings }) {
     () => store.getActiveFile(),
     [store.activeFileId, store.files]
   );
-  const projectName = "CodeForge AI"; // Nome fisso per l'MVP
+  const projectName = "LLMForge AI"; // Nome fisso per l'MVP
 
   return (
     <header className="h-10 bg-editor-darker border-b border-editor-border flex items-center justify-between px-4 text-white">

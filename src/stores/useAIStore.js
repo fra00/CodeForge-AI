@@ -6,9 +6,14 @@ import { useFileStore } from "./useFileStore";
 import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
 import { buildSystemPrompt, SYSTEM_PROMPT } from "./ai/systemPrompt";
 import { getResponseSchema } from "./ai/responseSchema";
+import Ajv from "ajv";
 
 import { ENVIRONMENTS } from "./environment";
 const stoppingObject = { isStopping: false };
+
+// --- Validatore AJV ---
+const ajv = new Ajv();
+const validateResponse = ajv.compile(getResponseSchema());
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
@@ -27,23 +32,6 @@ const initialMessages = [
       "Hello! I am Code Assistant, your AI software engineer assistant. How can I help you with your code today?",
   },
 ];
-
-/**
- * Valida la struttura della risposta
- */
-const validateResponseStructure = (response) => {
-  if (!response || typeof response !== "object") return false;
-  const validActions = [
-    "create_file",
-    "update_file",
-    "delete_file",
-    "text_response",
-    "tool_call",
-    "start_multi_file",
-    "continue_multi_file",
-  ];
-  return validActions.includes(response.action);
-};
 
 const normalizePath = (path) => {
   if (!path) return "";
@@ -314,7 +302,7 @@ export const useAIStore = create((set, get) => ({
     const { addMessage, sendMessage, multiFileTaskState } = get();
 
     // Attendi che l'iframe si ricarichi e che eventuali errori vengano catturati
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
     const lastError = window.projectContext?.lastIframeError;
     window.projectContext.lastIframeError = null; // Consuma l'errore
@@ -455,19 +443,19 @@ export const useAIStore = create((set, get) => ({
     });
     addMessage({
       id: Date.now().toString(),
-      role: "status", // Ruolo di stato per non inquinare la cronologia AI
-      content: message || `Start Task: ${plan.description}`,
+      role: "assistant", // Ruolo di stato per non inquinare la cronologia AI
+      content: `Start Task: ${plan.description} + \n ${message}`,
     });
 
     try {
-      const results = fileStore.applyFileActions(
-        [first_file.file],
-        first_file.action
+      const result = fileStore.applyFileActions(
+        first_file.action,
+        first_file.file
       );
       addMessage({
         id: `${Date.now()}-res`,
         role: "file-status", // Ruolo di stato per non inquinare la cronologia AI
-        content: results.join("\n") || "First file action completed.",
+        content: result || "First file action completed.",
       });
 
       const currentPath = first_file.file.path;
@@ -514,19 +502,19 @@ export const useAIStore = create((set, get) => ({
 
     addMessage({
       id: `${Date.now()}-msg`,
-      role: "status", // Ruolo di stato per non inquinare la cronologia AI
-      content: message || `Continuing with ${next_file.file.path}...`,
+      role: "assistant", // Ruolo di stato per non inquinare la cronologia AI
+      content: `Continuing with ${next_file.file.path} \n ${message}`,
     });
 
     try {
-      const results = fileStore.applyFileActions(
-        [next_file.file],
-        next_file.action
+      const result = fileStore.applyFileActions(
+        next_file.action,
+        next_file.file
       );
       addMessage({
         id: `${Date.now()}-res`,
         role: "file-status", // Ruolo di stato per non inquinare la cronologia AI
-        content: results.join("\n") || "Action completed.",
+        content: result || "Action completed.",
       });
 
       const currentPath = next_file.file.path;
@@ -575,7 +563,7 @@ export const useAIStore = create((set, get) => ({
     let shouldContinue = false; // Default: non continuare il loop.
     if (action === "text_response") {
       shouldContinue = await get()._handleTextResponse(text_response);
-      return true; // Dopo una risposta testuale, continua per eventuali altre azioni
+      return false; // Dopo una risposta testuale, continua per eventuali altre azioni
     } else if (action === "tool_call" && tool_call) {
       shouldContinue = await get()._handleToolCall(tool_call);
       return true; // Dopo una chiamata a tool, continua per eventuali altre azioni
@@ -824,8 +812,26 @@ export const useAIStore = create((set, get) => ({
 
         console.log("Parsed AI Response JSON:", jsonObject);
 
-        if (!validateResponseStructure(jsonObject)) {
-          throw new Error(`Invalid action: ${jsonObject.action}`);
+        // --- 🛡️ VALIDAZIONE DELLO SCHEMA ---
+        // Questo è il "controllo qualità" che rende lo schema un contratto blindato.
+        const isValid = validateResponse(jsonObject);
+        if (!isValid) {
+          const validationErrors = JSON.stringify(
+            validateResponse.errors,
+            null,
+            2
+          );
+          console.error(
+            "AI Response failed schema validation:",
+            validationErrors
+          );
+          addMessage({
+            id: Date.now().toString(),
+            role: "user", // Lo presentiamo come un errore di sistema che l'AI deve vedere
+            content: `[SYSTEM-ERROR] Your response does not conform to the required JSON schema. Please correct it. Errors:\n${validationErrors}`,
+          });
+          // Continuiamo il loop per permettere all'AI di correggersi.
+          continue;
         }
 
         // --- DISPATCHER ---
@@ -882,6 +888,11 @@ export const useAIStore = create((set, get) => ({
         return { conversations: newConversations };
       });
       set({ isStreaming: false, abortController: null });
+      addMessage({
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `✓ Task completed. Total tool calls: ${toolCallCount}.`,
+      });
       await get().saveConversation();
     }
   },

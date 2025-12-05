@@ -7,9 +7,35 @@ export const ENVIRONMENTS = {
     label: "Web (HTML/CSS/JS)",
     rules: `
 # WEB DEVELOPMENT CONTEXT RULES
-- You are an expert in modern web development (HTML, CSS, JavaScript/TypeScript).
-- Assume a modern browser environment with support for ES6+ features.
-- For styling, prefer Tailwind CSS if not specified otherwise.
+- You are an expert in modern web development (HTML5, CSS3, ES6+ JavaScript).
+- **ENVIRONMENT:** The code runs directly in a browser. There is NO bundler (like Vite or Webpack).
+- **CRITICAL - JAVASCRIPT:**
+  - **CRITICAL: DO NOT use ES6 Modules (\`import\` / \`export\`).** The environment does not support them.
+  - **MODULARITY PATTERN:** To write modular code, use the "Namespace Pattern".
+    1. Create a single global object, e.g., \`window.App = window.App || {};\`.
+    2. In each file, attach functions and objects to this namespace, e.g., \`App.utils = { ... };\`.
+    3. In \`index.html\`, include multiple \`<script>\` tags.
+    4. **CRITICAL: The order of <script> tags MUST respect dependencies.** Files that define functionality must be loaded BEFORE files that use it.
+  - **DOM Safety:** NEVER assume an element exists. Always check if \`document.querySelector(...)\` returns null before using it.
+  - **Cleanup:** If you add event listeners dynamically, ensure you don't create duplicates.
+
+- **CRITICAL - ENTRY POINT:**
+  - **HTML Structure:** Create a container \`<div id="app"></div>\` (or similar) in the body to attach your logic.
+  - **Script Tags:** In \`index.html\`, include all necessary \`<script src="..."></script>\` tags (NO \`type="module"\`) at the end of the \`<body>\`. The main entry point script (e.g., \`main.js\`) should be the LAST one.
+  
+- **STATE MANAGEMENT (CRITICAL):**
+  - Vanilla JS does not auto-update. You MUST explicitly update the DOM when data changes.
+  - **Pattern:** Prefer a \`render()\` function that accepts state and updates the HTML, calling it whenever state changes.
+  - Avoid modifying \`innerHTML\` randomly across the code; centralize DOM updates.
+
+- **STYLING:**
+  - If requested to use **Tailwind CSS**: Add the CDN script \`<script src="https://cdn.tailwindcss.com"></script>\` to the \`<head>\` of \`index.html\` (unless a build process is explicitly configured).
+  - Otherwise, use standard CSS with a clean structure.
+
+- **VALIDATION:**
+  - Ensure case sensitivity in imports.
+  - Do not use \`alert()\` or \`prompt()\` for UI; create custom HTML modals/overlays instead.
+  - Verify that all functions called in HTML attributes (like \`onclick="..."\`) are actually attached to the \`window\` object, OR (better) attach listeners via JS (\`element.addEventListener\`).
     `,
   },
   react: {
@@ -17,11 +43,25 @@ export const ENVIRONMENTS = {
     rules: `
 # REACT CONTEXT RULES
 - You are an expert in modern React (Hooks, Functional Components).
-- **CRITICAL:** Assume the environment supports JSX/TSX compilation and React runtime.
-- For UI elements, DEVI importare e usare i componenti dal percorso \`src/components/ui/\`.
-- **CRITICAL:** Usa ESCLUSIVAMENTE la sintassi \`import/export\` per le dipendenze tra file. NON usare \`require()\` (CommonJS) in nessun file.
-- **CRITICAL:** In \`index.html\`, DEVI includere il tag \`<script type="module" src="/src/main.jsx"></script>\` (o il tuo entry point) nel \`<body>\`. Questo è necessario per il sistema di Live Preview.
-- NON includere altri tag \`<script>\` o \`<link>\` esterni. Il sistema gestisce il runtime e le dipendenze.
+- **ENVIRONMENT:** The code runs in a browser-based bundler (like Vite). The environment supports JSX/TSX compilation and the React runtime.
+- **CRITICAL - IMPORTS:** 
+  - **CRITICAL: You MUST use ES6 Modules (\`import\`/\`export\`).** This is a modern React project.
+  - **NEVER use \`require()\`**.
+  - **MANDATORY:** Use explicit relative paths (\`./\`, \`../\`). Do not use aliases like \`@/\`.
+  - You can omit file extensions for \`.js\`, \`.jsx\`, \`.ts\`, \`.tsx\` files as the bundler will resolve them.
+- **CRITICAL - ENTRY POINT:**
+  - In \`\index.html\`, ensure there is a \`<div id="root"></div>\`.
+  - In \`src/main.jsx\` (or entry file), ensure you mount to the SAME ID: \`ReactDOM.createRoot(document.getElementById('root')).render(...)\`.
+  - In \`index.html\`, include \`<script type="module" src="/src/main.jsx"></script>\` inside the \`<body>\`.
+- Pay attention to React best practices:
+  - **Export Pattern:** Prefer \`export default\` for main Components and \`export const\` for utility functions.
+  - **JSX:** Always return a single root element or use Fragments \`<>...</>\`.
+  - NEVER mutate state directly; use setters.
+  - Ensure Hooks (\`useState\`, \`useEffect\`) are only at the top level of components.
+  - Check dependency arrays in \`useEffect\` for completeness.
+
+- **STYLING:**
+  - If requested to use **Tailwind CSS**: Add the CDN script \`<script src="https://cdn.tailwindcss.com"></script>\` to the \`<head>\` of \`index.html\`.
     `,
   },
   csharp: {

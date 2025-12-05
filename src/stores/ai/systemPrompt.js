@@ -81,7 +81,7 @@ read_file   STEP 3
 
 **Esempi:**
 - "Aggiungi pulsante a Header.jsx" → Prima \`read_file\` per Header.jsx
-- "Crea nuovo Login.jsx" → NO lettura necessaria
+- "Crea nuovo Login.jsx che usa AuthContext" → \`read_file\` per AuthContext.js (per vedere gli export)
 - "Analizza tutti i componenti" → \`read_file\` con array \`paths\`
 - "Rimuovi funzione da utils.js e api.js" → \`read_file\` per entrambi i file
 - "Risolvi il problema della login" → \`read_file\` Login.jsx, Auth.js, API.js
@@ -182,6 +182,7 @@ console.log(myVar);
 ---
 
 ## 📋 Formato Risposta JSON
+L'unica forma di comunicazione con il sistema è tramite risposte JSON strutturate.
 
 ### 🚨 REGOLA CRITICA: JSON Su Singola Riga
 
@@ -224,7 +225,6 @@ export default function Component() {
 1. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
 2. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
 3. SE SERVE CONTENUTO FILE, DEVE ESSERE PRESENTE IL SEPARATORE \`# [content-file]:\`.
-
 ---
 
 ## 📘 Azioni Disponibili
@@ -343,7 +343,16 @@ export const newApi = () => { /* ... */ };
 import { newApi } from './api';
 // rest of code...
 
-**Quando terminare:** Dopo l'ultimo file in \`plan.files_to_modify\`
+**Quando terminare:** Dopo l'ultimo file in \`plan.files_to_modify\` - Termina Task
+Prima di Terminare verifica:
+1. Se il task è completato , verifica:
+  - Tutti i file in \`plan.files_to_modify\` sono stati generati/modificati
+  - Fornisci una breve sintesi del lavoro svolto
+  - Termina il multi-file task
+  - Verifica la correttezza del codice generato
+  - verifica che tutte le dipendenze tra file siano corrette
+  ⚠️ Se ci sono errori , correggili prima di terminare il task, puoi iniziare un nuovo multi-file task se necessario.
+2. Se NON è completato , procedi con la chiusura del piano.
 
 `;
 
@@ -387,6 +396,7 @@ import { newApi } from './api';
       "Nessuno (task completato)"
     }
 
+
 ---
 
 #### ❌ NON FARE
@@ -420,6 +430,12 @@ import { newApi } from './api';
 
 #### Errore 1: Virgola Finale
 \`\`\`json
+❌ Questa è la risposta del LLM
+✅ {"action":"text_response","text_response":"Questa è la risposta del LLM"}
+\`\`\`
+
+#### Errore 1: Virgola Finale
+\`\`\`json
 ❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx",}}}
 ✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
@@ -448,36 +464,22 @@ import { newApi } from './api';
 ## 🛡️ SAFETY & VALIDATION CHECKLIST
 Before outputting the code, verify these 7 points:
 
-1.  **Import/Export Mismatch**:
-    - Verify strict matching between imports and exports (Named \`{...}\` vs Default).
-    - Ensure case sensitivity (e.g., \`User\` !== \`user\`).
-
-2.  **Null/Undefined Safety**:
+1.  **Null/Undefined Safety**:
     - NEVER access nested properties (e.g., \`data.users.map\`) without optional chaining (\`?.\`) or explicit checks, to prevent runtime crashes.
 
-3.  **Framework & Lifecycle Integrity** (If using React):
-    - Ensure Hooks (\`useState\`, \`useEffect\`) are only at the top level of components.
-    - Check dependency arrays in \`useEffect\` for completeness.
-    - In Vanilla JS, ensure DOM elements exist before manipulation.
-
-4.  **Variable Shadowing & Scoping**:
+3.  **Variable Shadowing & Scoping**:
     - Ensure you are not declaring variables with names that shadow imports or global objects (like \`window\`, \`document\`).
     - Verify there are no typos in function calls.
 
-5.  **State Management**:
-    - In React: NEVER mutate state directly; use setters.
-    - In Vanilla: Ensure data updates trigger necessary UI updates manually.
-
-6.  **No "Lazy" Placeholders**:
+5.  **No "Lazy" Placeholders**:
     - Do not output incomplete code (e.g., \`// ... rest of code\`). The code must be fully functional.
 
-7.  **Path Accuracy & Extensions**:
-    - Validate imports against the provided Project Structure.
-    - ALWAYS use explicit relative paths (\`./\`, \`../\`).
-    - **MANDATORY**: Include file extensions in imports (e.g., \`import App from './App.jsx'\`, NOT \`from './App'\`) for browser compatibility.
-
-8.  **Adhere to Environment Rules**:
+7.  **Adhere to Environment Rules**:
     - Each component or function mus be less than 100 lines of code.
+
+8. **Context Awareness**:
+   - If you are modifying a function but don't see its full code (because you haven't read the file), STOP.
+   - Use \`read_file\` first. Do not overwrite logic you cannot see.
 ---
 `;
   }

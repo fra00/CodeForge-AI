@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { initDB, getAll, put, remove, clear } from "../utils/indexedDB";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
-import { analyzeCodeStructure } from "../utils/analyzeCode";
 
 // --- Initial State & Constants ---
 const FILES_STORE_NAME = "files";
@@ -165,7 +164,7 @@ export const useFileStore = create((set, get) => ({
           name: "index.html",
           path: "/index.html",
           isFolder: false,
-          content: "<h1>Hello CodeForge AI!</h1>",
+          content: "<h1>Hello LLMForge AI!</h1>",
           language: "html",
           parentId: ROOT_ID,
           isDirty: true, // Sarà salvato al primo autosave
@@ -568,68 +567,49 @@ export const useFileStore = create((set, get) => ({
 
   /**
    * Applica un set di azioni (creazione, modifica, eliminazione) al VFS.
-   * Utilizzata per eseguire le istruzioni strutturate dell'AI.
-   * @param {object[]} actions - Array di oggetti azione (path, content).
-   * @param {string} actionType - Tipo di azione ('create_files', 'update_files', 'delete_files').
+   * Esegue una singola azione su un file, come specificato dal nuovo flusso AI.
+   * @param {string} actionType - Tipo di azione ('create_file', 'update_file', 'delete_file').
+   * @param {object} file - Oggetto file con 'path' e 'content' (opzionale per delete).
+   * @returns {string} Un messaggio di risultato per il log.
    */
-  applyFileActions: (actions, actionType) => {
+  applyFileActions: (actionType, file) => {
     const state = get();
     const { _createNodeFromPath, updateFileContent, deleteNode } = state;
-    const results = [];
+    const { path, content } = file;
+    const normalizedPath = path.startsWith("/") ? path : "/" + path;
 
-    for (const action of actions) {
-      const { path, content } = action;
-      const normalizedPath = path.startsWith("/") ? path : "/" + path;
-
-      try {
-        if (actionType === "create_file") {
-          const result = _createNodeFromPath(normalizedPath, content);
-          // results.push(result.message);
-          // results.push("content: '" + content + "'");
-          results.push("content: '" + content + "'");
-        } else if (actionType === "update_file") {
-          // ✅ UPDATE: Solo se esiste già
-          const existingNode = findNodeByPath(state.files, normalizedPath);
-          if (!existingNode) {
-            results.push(
-              `✗ ERROR: File ${normalizedPath} not found. Use 'create_files' to create it.`
-            );
-            continue;
-          }
-          if (existingNode.isFolder) {
-            results.push(
-              `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`
-            );
-            continue;
-          }
-
-          updateFileContent(existingNode.id, content);
-          // results.push(`✓ File ${normalizedPath} updated`);
-          results.push("content: '" + content + "'");
-        } else if (actionType === "delete_file") {
-          // ✅ DELETE: Elimina se esiste
-          const existingNode = findNodeByPath(state.files, normalizedPath);
-          if (!existingNode) {
-            results.push(`✗ ERROR: Node ${normalizedPath} not found`);
-            continue;
-          }
-
-          // deleteNode è async, ma lo chiamiamo senza await per non bloccare il loop
-          deleteNode(existingNode.id);
-          results.push(`✓ Node ${normalizedPath} deleted`);
-        } else {
-          results.push(`✗ ERROR: Unknown action type: ${actionType}`);
+    try {
+      if (actionType === "create_file") {
+        _createNodeFromPath(normalizedPath, content);
+        return `✓ File ${normalizedPath} created. content:\n ${content}.`;
+      } else if (actionType === "update_file") {
+        const existingNode = findNodeByPath(state.files, normalizedPath);
+        if (!existingNode) {
+          return `✗ ERROR: File ${normalizedPath} not found. Use 'create_file' to create it.`;
         }
-      } catch (e) {
-        results.push(`✗ FATAL ERROR on ${normalizedPath}: ${e.message}`);
-        console.error(
-          `Error applying action ${actionType} on ${normalizedPath}:`,
-          e
-        );
+        if (existingNode.isFolder) {
+          return `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`;
+        }
+        updateFileContent(existingNode.id, content);
+        return `✓ File ${normalizedPath} content \n ${content}.`;
+      } else if (actionType === "delete_file") {
+        const existingNode = findNodeByPath(state.files, normalizedPath);
+        if (!existingNode) {
+          return `✗ ERROR: Node ${normalizedPath} not found.`;
+        }
+        // deleteNode è async, ma lo chiamiamo senza await per non bloccare il loop
+        deleteNode(existingNode.id);
+        return `✓ Node ${normalizedPath} deleted.`;
+      } else {
+        return `✗ ERROR: Unknown action type: ${actionType}`;
       }
+    } catch (e) {
+      console.error(
+        `Error applying action ${actionType} on ${normalizedPath}:`,
+        e
+      );
+      return `✗ FATAL ERROR on ${normalizedPath}: ${e.message}`;
     }
-
-    return results;
   },
 
   /**

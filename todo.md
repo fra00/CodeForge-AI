@@ -5,8 +5,10 @@
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
 - add an executution plan before start coding and add message summary execution
-- preview with full height
+- preview with full height (fixed)
 - remove multi file , use only simple action, is alwais multi file
+- add tool to search string into project file , find all file where string is finded
+- add tool to find a message into history?
 
 - 20251201
   x use react

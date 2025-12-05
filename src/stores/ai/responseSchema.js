@@ -12,26 +12,14 @@ export const getResponseSchema = () => ({
     action: {
       type: "string",
       enum: [
-        "create_file",
-        "update_file",
-        "delete_file",
         "text_response",
         "tool_call",
         "start_multi_file",
         "continue_multi_file",
       ],
     },
-    files: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          path: { type: "string" },
-          content: { type: "string" },
-        },
-        required: ["path"],
-      },
-    },
+    // Le azioni "create/update/delete_file" sono ora nidificate dentro "start/continue_multi_file"
+    // e non sono più azioni di primo livello. Le relative proprietà "files" e "file" vengono rimosse da qui.
     file: {
       type: "object",
       properties: {
@@ -65,6 +53,34 @@ export const getResponseSchema = () => ({
         description: { type: "string" },
         files_to_modify: { type: "array", items: { type: "string" } },
       },
+    },
+    first_file: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["create_file", "update_file"] },
+        file: {
+          type: "object",
+          properties: {
+            path: { type: "string" },
+            content: { type: "string" },
+          },
+          required: ["path", "content"],
+        },
+      },
+      required: ["action", "file"],
+    },
+    next_file: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["create_file", "update_file", "delete_file"],
+        },
+        file: {
+          $ref: "#/properties/file", // Riusa la definizione di 'file'
+        },
+      },
+      required: ["action", "file"],
     },
   },
   required: ["action"],
