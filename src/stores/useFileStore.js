@@ -306,7 +306,7 @@ export const useFileStore = create((set, get) => ({
   /**
    * Crea un nuovo file o cartella.
    */
-  createFileOrFolder: (parentId, name, isFolder = false, content = "") => {
+  createFileOrFolder: (parentId, name, isFolder = false, content = "", tags = {}) => {
     const state = get();
     const parent = state.files[parentId];
     if (!parent || !parent.isFolder) {
@@ -339,6 +339,7 @@ export const useFileStore = create((set, get) => ({
       children: isFolder ? [] : undefined,
       isDirty: true, // Nuovo file/cartella da salvare
       isNew: true,
+      tags: isFolder ? {} : tags, // Aggiungi i tag al nuovo nodo
     };
 
     set((state) => {
@@ -513,17 +514,17 @@ export const useFileStore = create((set, get) => ({
    * Gestisce la creazione ricorsiva delle cartelle necessarie.
    * @private
    */
-  _createNodeFromPath: (fullPath, content = "") => {
+  _createNodeFromPath: (fullPath, content = "", tags = {}) => {
     const { rootId, createFileOrFolder, updateFileContent } = get();
 
     // A ogni chiamata, prendi lo stato più recente dei file
     const currentFiles = get().files;
     const existingNode = findNodeByPath(currentFiles, fullPath);
 
-    // Comportamento UPSERT: se il file esiste, lo aggiorniamo.
+    // Comportamento UPSERT: se il file esiste, lo aggiorniamo con contenuto e tag.
     if (existingNode && !existingNode.isFolder) {
-      updateFileContent(existingNode.id, content);
-      return { message: `✓ File ${fullPath} updated (already existed)` };
+      updateFileContent(existingNode.id, content, tags);
+      return { message: `✓ File ${fullPath} updated with new content and tags.` };
     }
     if (existingNode && existingNode.isFolder) {
       throw new Error(
@@ -560,7 +561,7 @@ export const useFileStore = create((set, get) => ({
     }
 
     // Ora crea il file
-    createFileOrFolder(parentId, name, false, content);
+    createFileOrFolder(parentId, name, false, content, tags);
     results.push(`✓ File ${fullPath} created`);
     return { message: results.join("\n") };
   },
@@ -572,7 +573,7 @@ export const useFileStore = create((set, get) => ({
    * @param {object} file - Oggetto file con 'path' e 'content' (opzionale per delete).
    * @returns {string} Un messaggio di risultato per il log.
    */
-  applyFileActions: (actionType, file) => {
+  applyFileActions: (actionType, file, tags = {}) => {
     const state = get();
     const { _createNodeFromPath, updateFileContent, deleteNode } = state;
     const { path, content } = file;
@@ -580,18 +581,20 @@ export const useFileStore = create((set, get) => ({
 
     try {
       if (actionType === "create_file") {
-        _createNodeFromPath(normalizedPath, content);
-        return `✓ File ${normalizedPath} created. content:\n ${content}.`;
+        _createNodeFromPath(normalizedPath, content, tags);
+        return `✓ File ${normalizedPath} created.`;
       } else if (actionType === "update_file") {
         const existingNode = findNodeByPath(state.files, normalizedPath);
         if (!existingNode) {
-          return `✗ ERROR: File ${normalizedPath} not found. Use 'create_file' to create it.`;
+          // Se il file non esiste, lo creiamo (comportamento upsert)
+          _createNodeFromPath(normalizedPath, content, tags);
+          return `✓ File ${normalizedPath} created (was missing).`;
         }
         if (existingNode.isFolder) {
           return `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`;
         }
-        updateFileContent(existingNode.id, content);
-        return `✓ File ${normalizedPath} content \n ${content}.`;
+        updateFileContent(existingNode.id, content, tags);
+        return `✓ File ${normalizedPath} updated.`;
       } else if (actionType === "delete_file") {
         const existingNode = findNodeByPath(state.files, normalizedPath);
         if (!existingNode) {
@@ -718,20 +721,30 @@ export const useFileStore = create((set, get) => ({
   /**
    * Aggiorna il contenuto di un file.
    */
-  updateFileContent: (id, newContent) => {
+  updateFileContent: (id, newContent, tags) => {
     const file = get().files[id];
     if (!file || file.isFolder) return;
 
-    set((state) => ({
-      files: {
-        ...state.files,
-        [id]: {
-          ...file,
-          content: newContent,
-          isDirty: true,
+    set((state) => {
+      const updatedFile = {
+        ...state.files[id],
+        content: newContent,
+        isDirty: true,
+      };
+
+      // Aggiorna i tag solo se vengono forniti.
+      // Questo evita di cancellare i tag esistenti se l'AI non li invia in un aggiornamento.
+      if (tags && Object.keys(tags).length > 0) {
+        updatedFile.tags = tags;
+      }
+
+      return {
+        files: {
+          ...state.files,
+          [id]: updatedFile,
         },
-      },
-    }));
+      };
+    });
   },
 
   // --- Selectors ---

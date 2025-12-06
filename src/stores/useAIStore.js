@@ -456,7 +456,8 @@ export const useAIStore = create((set, get) => ({
     try {
       const result = fileStore.applyFileActions(
         first_file.action,
-        first_file.file
+        first_file.file,
+        first_file.tags // Passa i tag allo store dei file
       );
       addMessage({
         id: `${Date.now()}-res`,
@@ -516,7 +517,8 @@ export const useAIStore = create((set, get) => ({
     try {
       const result = fileStore.applyFileActions(
         next_file.action,
-        next_file.file
+        next_file.file,
+        next_file.tags // Passa i tag allo store dei file
       );
       addMessage({
         id: `${Date.now()}-res`,
@@ -538,7 +540,7 @@ export const useAIStore = create((set, get) => ({
         },
       }));
 
-      return await get()._checkForRuntimeErrors();
+      // return await get()._checkForRuntimeErrors();
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -592,7 +594,7 @@ export const useAIStore = create((set, get) => ({
       });
       shouldContinue = false; // Non continuare
     }
-    shouldContinue = await get()._checkForRuntimeErrors();
+    // shouldContinue = await get()._checkForRuntimeErrors();
     return shouldContinue;
   },
 

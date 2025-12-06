@@ -21,14 +21,25 @@ export const buildSystemPrompt = (
   const chatEnvironment = currentChat?.environment || "web";
   const environmentRules = ENVIRONMENTS[chatEnvironment]?.rules || ""; // Prende le regole o una stringa vuota se l'ambiente non è valido
 
-  const filePaths = Object.values(fileStore.files)
+  const filePathsWithTags = Object.values(fileStore.files)
     .filter((node) => node.id !== fileStore.rootId && !node.isFolder)
-    .map((node) => node.path)
+    .map((node) => {
+      let fileInfo = node.path;
+      // Se il file ha dei tag, li aggiungiamo alla stringa
+      if (node.tags && Object.keys(node.tags).length > 0) {
+        // Appiattiamo tutti i tag in un unico array e rimuoviamo i duplicati
+        const allTags = [...new Set(Object.values(node.tags).flat())];
+        if (allTags.length > 0) {
+          fileInfo += ` # tags: [${allTags.join(", ")}]`;
+        }
+      }
+      return fileInfo;
+    })
     .sort();
 
   const projectStructure = `
-# 📁 STRUTTURA DEL PROGETTO (Solo File)
-${filePaths.join("\n")}
+# 📁 STRUTTURA DEL PROGETTO (File e Metadati)
+${filePathsWithTags.join("\n")}
 `;
 
   let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${environmentRules}\n---
@@ -38,7 +49,8 @@ Indice contenuti:
 2. ⚙️ AUTO-DEBUGGING PROTOCOL
 3. 📋 Formato Risposta JSON
 4. 📘 Azioni Disponibili
-5. 🏗️ CODE INTEGRITY RULES
+5. 🏷️ METADATA TAGGING PROTOCOL
+5. ️ CODE INTEGRITY RULES
 6. 🔍 Auto-Verifica Pre-Invio
 7. 🛡️ SAFETY & VALIDATION CHECKLIST
 
@@ -248,6 +260,40 @@ export default function Component() {
 
 ---
 
+## 🏷️ METADATA TAGGING PROTOCOL
+
+### Obiettivo
+Arricchire ogni file con metadati per migliorare la ricerca e la comprensione del progetto.
+
+### 🚨 REGOLA CRITICA: Tagging Obbligatorio
+Ogni volta che usi \`create_file\` o \`update_file\`, DEVI includere un oggetto \`tags\` per descrivere il file.
+
+### Struttura Oggetto \`tags\`
+
+| Categoria | Descrizione | Esempio |
+|-----------|-------------|---------|
+| \`primary\` | Concetti chiave, scopo principale del file. | \`["authentication", "user-profile"]\` |
+| \`technical\` | Tecnologie, librerie, stack usati. | \`["React", "hook", "axios", "formik"]\` |
+| \`domain\` | Area di business o del dominio a cui appartiene. | \`["e-commerce", "user-management"]\` |
+| \`patterns\` | Design pattern architetturali implementati. | \`["custom-hook", "state-machine", "provider"]\` |
+
+### Esempio Completo in un'Azione
+
+L'oggetto \`tags\` deve essere posizionato allo stesso livello di \`action\` e \`file\`.
+
+\`\`\`json
+{"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/hooks/useCart.js"},"tags":{"primary":["cart","state-management"],"technical":["React","hook","localStorage"],"domain":["e-commerce"],"patterns":["custom-hook"]}},"message":"..."}
+# [content-file]:
+export function useCart() { /* ... */ }
+\`\`\`
+
+### ⚠️ REGOLE CRITICHE [METADATA TAGGING PROTOCOL] (GOLDEN RULES)
+1. **SEMPRE INCLUDI I TAG**: Ogni \`create_file\` e \`update_file\` deve avere l'oggetto \`tags\`.
+2. **SII SPECIFICO**: Usa tag descrittivi e pertinenti.
+3. **POSIZIONE CORRETTA**: L'oggetto \`tags\` va dentro \`first_file\` o \`next_file\`, allo stesso livello di \`action\` e \`file\`.
+
+---
+
 ## 📘 Azioni Disponibili
 
 ### 1. Risposta Testuale
@@ -294,7 +340,7 @@ Devono essere usate ESCLUSIVAMENTE all'interno di \`start_multi_file\` (nel camp
 **Struttura:**
 {action:"start_multi_file"|"continue_multi_file","first_file|next_file":{"action":"create_file"|"update_file","file":{"path":"src/components/NewComponent.jsx"}},"message":"..."}
 # [content-file]:
-export default function Header() { return <div>Logo</div>; }
+export default function Header() { return <div>Logo</div>; } 
 
 ⚠️ **update_file:** Fornisci contenuto **COMPLETO** (sovrascrive tutto)
 ⚠️ Utilizza solo su MULTI-FILE tasks iniziati con \`start_multi_file\`
@@ -336,7 +382,7 @@ export default function Header() { return <div>Logo</div>; }
 #### start_multi_file - Inizia Task Multi-File
 
 **Struttura:**
-{"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx","src/Login.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"}},"message":"Starting: API utility first"}
+{"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}},"message":"Starting: API utility first"}
 # [content-file]:
 export const newApi = () => { /* ... */ };
 
@@ -359,7 +405,7 @@ export const newApi = () => { /* ... */ };
 #### continue_multi_file - Continua Task
 
 **Uso:** Dopo ogni conferma sistema, invia file successivo
-{"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}},"message":"Step 2/3: Updating main app"}
+{"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"},"tags":{"primary":["app-root","routing"],"technical":["React","react-router"]}},"message":"Step 2/3: Updating main app"}
 # [content-file]:
 import { newApi } from './api';
 // rest of code...

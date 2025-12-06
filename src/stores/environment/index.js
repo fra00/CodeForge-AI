@@ -30,12 +30,19 @@ export const ENVIRONMENTS = {
 
 - **STYLING:**
   - If requested to use **Tailwind CSS**: Add the CDN script \`<script src="https://cdn.tailwindcss.com"></script>\` to the \`<head>\` of \`index.html\` (unless a build process is explicitly configured).
-  - Otherwise, use standard CSS with a clean structure.
+  - Otherwise, use standard CSS file.
 
 - **VALIDATION:**
   - Ensure case sensitivity in imports.
   - Do not use \`alert()\` or \`prompt()\` for UI; create custom HTML modals/overlays instead.
-  - Verify that all functions called in HTML attributes (like \`onclick="..."\`) are actually attached to the \`window\` object, OR (better) attach listeners via JS (\`element.addEventListener\`).
+  - **Every interactive element needs a handler:**
+    - Button → addEventListener in App.init
+    - Form → submit handler
+    - Dynamic elements → event delegation
+  - **Pattern:**
+    1. Create HTML element with id
+    2. In App.init: getElementById + addEventListener
+    3. Always null check before attaching
     `,
   },
   react: {

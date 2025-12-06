@@ -7,6 +7,32 @@
  * @returns {object} L'oggetto JSON Schema.
  */
 export const getResponseSchema = () => ({
+  $schema: "http://json-schema.org/draft-07/schema#",
+  title: "AI Response Schema",
+  description: "Schema for validating the JSON response from the AI assistant.",
+
+  definitions: {
+    tagsObject: {
+      type: "object",
+      properties: {
+        primary: { type: "array", items: { type: "string" } },
+        technical: { type: "array", items: { type: "string" } },
+        domain: { type: "array", items: { type: "string" } },
+        patterns: { type: "array", items: { type: "string" } },
+      },
+      additionalProperties: false,
+    },
+    fileAction: {
+      type: "object",
+      properties: {
+        action: { enum: ["create_file", "update_file", "delete_file"] },
+        file: { $ref: "#/properties/file" },
+        tags: { $ref: "#/definitions/tagsObject" }, // Riferimento ai tag
+      },
+      required: ["action", "file"],
+    },
+  },
+
   type: "object",
   properties: {
     action: {
@@ -18,8 +44,6 @@ export const getResponseSchema = () => ({
         "continue_multi_file",
       ],
     },
-    // Le azioni "create/update/delete_file" sono ora nidificate dentro "start/continue_multi_file"
-    // e non sono più azioni di primo livello. Le relative proprietà "files" e "file" vengono rimosse da qui.
     file: {
       type: "object",
       properties: {
@@ -51,37 +75,41 @@ export const getResponseSchema = () => ({
       type: "object",
       properties: {
         description: { type: "string" },
-        files_to_modify: { type: "array", items: { type: "string" } },
-      },
-    },
-    first_file: {
-      type: "object",
-      properties: {
-        action: { type: "string", enum: ["create_file", "update_file"] },
-        file: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-            content: { type: "string" },
-          },
-          required: ["path", "content"],
+        files_to_modify: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
         },
       },
-      required: ["action", "file"],
+      required: ["description", "files_to_modify"],
     },
-    next_file: {
-      type: "object",
-      properties: {
-        action: {
-          type: "string",
-          enum: ["create_file", "update_file", "delete_file"],
-        },
-        file: {
-          $ref: "#/properties/file", // Riusa la definizione di 'file'
-        },
-      },
-      required: ["action", "file"],
-    },
+    first_file: { $ref: "#/definitions/fileAction" },
+    next_file: { $ref: "#/definitions/fileAction" },
   },
   required: ["action"],
+
+  // Aggiungiamo 'allOf' per una validazione condizionale più robusta
+  allOf: [
+    {
+      if: { properties: { action: { const: "start_multi_file" } } },
+      then: {
+        properties: {
+          action: { const: "start_multi_file" },
+          plan: { $ref: "#/properties/plan" },
+          first_file: { $ref: "#/definitions/fileAction" },
+        },
+        required: ["action", "plan", "first_file"],
+      },
+    },
+    {
+      if: { properties: { action: { const: "continue_multi_file" } } },
+      then: {
+        properties: {
+          action: { const: "continue_multi_file" },
+          next_file: { $ref: "#/definitions/fileAction" },
+        },
+        required: ["action", "next_file"],
+      },
+    },
+  ],
 });
