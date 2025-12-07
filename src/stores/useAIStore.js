@@ -3,9 +3,14 @@ import { create } from "zustand";
 import { getChatCompletion } from "../utils/aiService";
 import { getAll, put, clear, remove } from "../utils/indexedDB";
 import { useFileStore } from "./useFileStore";
-import { extractAndSanitizeJson } from "../utils/extractAndSanitizeJson";
-import { buildSystemPrompt, SYSTEM_PROMPT } from "./ai/systemPrompt";
+import { parseMultiPartResponse } from "../utils/responseParser"; // Importa il nuovo parser
+import {
+  buildSystemPrompt,
+  SYSTEM_PROMPT,
+  getProjectStructurePrompt,
+} from "./ai/systemPrompt";
 import { getResponseSchema } from "./ai/responseSchema";
+import { FRAMEWORK_2WHAV_PROMPT } from "./ai/2whavPrompt";
 import Ajv from "ajv";
 
 import { ENVIRONMENTS } from "./environment";
@@ -767,61 +772,19 @@ export const useAIStore = create((set, get) => ({
           rawText = JSON.stringify(response);
         }
 
-        const { rawJsonContent, contentFile } = extractAndSanitizeJson(rawText);
-        if (!rawJsonContent) {
+        // --- NUOVO PARSING MULTI-PARTE ---
+        const jsonObject = parseMultiPartResponse(rawText);
+
+        if (!jsonObject) {
+          console.error("Failed to parse AI response.", rawText);
           addMessage({
             id: Date.now().toString(),
             role: "assistant",
-            content: "⚠️ NO JSON VALID:\n" + rawText,
+            content:
+              "⚠️ Error: Could not parse the response structure. Raw response:\n" +
+              rawText,
           });
           continue;
-        }
-        // if (!jsonString) throw new Error("No valid JSON found in AI response.");
-
-        let jsonObject = null;
-        try {
-          jsonObject = JSON.parse(rawJsonContent);
-        } catch (e) {
-          console.error(
-            "JSON Parse Error:",
-            e,
-            "Raw JSON String:",
-            rawJsonContent
-          );
-        }
-        jsonObject = normalizeResponse(jsonObject);
-
-        // --- INIEZIONE PRAGMATICA (Opzione 2) ---
-        // Centralizziamo qui la logica di "arricchimento" del JSON.
-        // Iniettiamo il `contentFile` nell'oggetto corretto prima di procedere.
-        if (contentFile) {
-          const action = jsonObject.action;
-
-          if (
-            ["create_file", "update_file"].includes(action) &&
-            jsonObject.file
-          ) {
-            jsonObject.file.content = contentFile;
-            console.log(
-              `[Injector] Injected content into single action file: ${jsonObject.file.path}`
-            );
-          } else if (
-            action === "start_multi_file" &&
-            jsonObject.first_file?.file
-          ) {
-            jsonObject.first_file.file.content = contentFile;
-            console.log(
-              `[Injector] Injected content into multi-file start: ${jsonObject.first_file.file.path}`
-            );
-          } else if (
-            action === "continue_multi_file" &&
-            jsonObject.next_file?.file
-          ) {
-            jsonObject.next_file.file.content = contentFile;
-            console.log(
-              `[Injector] Injected content into multi-file continue: ${jsonObject.next_file.file.path}`
-            );
-          }
         }
 
         console.log("Parsed AI Response JSON:", jsonObject);
@@ -908,6 +871,71 @@ export const useAIStore = create((set, get) => ({
         content: `✓ Task completed. Total tool calls: ${toolCallCount}.`,
       });
       await get().saveConversation();
+    }
+  },
+
+  /**
+   * Usa il framework 2WHAV per espandere un prompt utente semplice in una specifica tecnica dettagliata.
+   * @param {string} userPrompt - Il testo inserito dall'utente.
+   * @param {object} settings - Le impostazioni AI correnti (provider, apiKey, modelName).
+   * @param {string} [mode='[FULL]'] - La modalità 2WHAV da applicare.
+   * @returns {Promise<string>} Il prompt esteso o un messaggio di errore.
+   */
+  extendPromptWith2WHAV: async (userPrompt, settings, mode = "[FULL]") => {
+    const fileStore = useFileStore.getState();
+    const { provider, apiKey, modelName, environment } = settings;
+
+    if (!provider || !apiKey || !modelName) {
+      const errorMsg = "Error: AI provider settings are not configured.";
+      console.error(errorMsg);
+      return errorMsg;
+    }
+
+    // Genera la struttura del progetto da includere nel prompt
+    const projectStructure = getProjectStructurePrompt(fileStore);
+
+    // Prompt specifico per la generazione della specifica 2WHAV
+    const specificationSystemPrompt = `You are a prompt engineering expert specializing in the 2WHAV framework. The current project environment is "${environment}".
+Your task is to take a user's request and expand it into a detailed, structured prompt using the 2WHAV framework provided below.
+Analyze the user's request and the provided project structure, identify the implicit requirements, and populate all relevant phases of the framework with specific file paths and details.
+The final output should be ONLY the generated markdown prompt, ready to be used.`;
+
+    const messages = [
+      {
+        role: "system",
+        content: `${specificationSystemPrompt}\n\n${projectStructure}\n\n${FRAMEWORK_2WHAV_PROMPT}`,
+      },
+      {
+        role: "user",
+        content: `Apply 2WHAV ${mode} to: "${userPrompt}"`,
+      },
+    ];
+
+    set({ isStreaming: true, error: null });
+
+    try {
+      const response = await getChatCompletion({
+        provider,
+        apiKey,
+        modelName,
+        messages,
+        stream: false,
+        maxTokens: 4096, // Un limite ragionevole per una specifica
+      });
+
+      // Estrai il testo dalla risposta, indipendentemente dalla struttura esatta
+      const extendedPrompt =
+        response?.text ||
+        response?.content ||
+        response?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "";
+
+      return extendedPrompt.trim();
+    } catch (error) {
+      console.error("Error extending prompt with 2WHAV:", error);
+      return `Error during prompt extension: ${error.message}`;
+    } finally {
+      set({ isStreaming: false });
     }
   },
 }));

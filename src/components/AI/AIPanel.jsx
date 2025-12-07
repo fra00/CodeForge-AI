@@ -16,7 +16,10 @@ const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
  * Componente principale per l'AI Assistant.
  * Gestisce la logica di chat, l'invio dei prompt e il rendering della cronologia.
  */
-export function AIPanel() {
+export function AIPanel({
+  extendPromptAction, // Nuova funzione per estendere il prompt
+  ...props
+}) {
   const {
     isStreaming,
     sendMessage,
@@ -37,7 +40,7 @@ export function AIPanel() {
   const currentChat = useAIStore((state) =>
     state.conversations.find((c) => c.id === state.currentChatId)
   );
-  const currentEnvironment = currentChat?.environment || 'web'; // Default a 'web'
+  const currentEnvironment = currentChat?.environment || "web"; // Default a 'web'
 
   const messages = useAIStore((state) => state.getMessages());
 
@@ -77,6 +80,16 @@ export function AIPanel() {
     sendMessage(prompt, context, aiProvider, apiKey, modelToUse); // Passa provider, apiKey e modelToUse
   };
 
+  // Crea un gestore per l'estensione del prompt che include le impostazioni.
+  const handleExtendPrompt = async (prompt) => {
+    const modelToUse =
+      llmModel ||
+      (aiProvider === "claude" ? DEFAULT_CLAUDE_MODEL : DEFAULT_GEMINI_MODEL);
+    const settings = { provider: aiProvider, apiKey, modelName: modelToUse };
+    // Chiama la funzione passata dalle props con tutti i parametri necessari.
+    return await extendPromptAction(prompt, settings, "[FULL]");
+  };
+
   const handleEnvironmentChange = (e) => {
     setChatEnvironment(e.target.value);
   };
@@ -106,7 +119,9 @@ export function AIPanel() {
     <div className="flex flex-col h-full w-full bg-editor-bg text-white">
       {/* Header con selezione ambiente */}
       <div className="flex items-center justify-end p-2 border-b border-editor-border h-10 text-xs flex-shrink-0">
-        <label htmlFor="env-select" className="mr-2 text-gray-400">Contesto:</label>
+        <label htmlFor="env-select" className="mr-2 text-gray-400">
+          Contesto:
+        </label>
         <select
           id="env-select"
           value={currentEnvironment}
@@ -158,6 +173,7 @@ export function AIPanel() {
           onSend={handleSendPrompt}
           onStop={stopGeneration}
           isGenerating={isGenerating}
+          onExtend={handleExtendPrompt}
         />
       </div>
     </div>

@@ -6,21 +6,11 @@ or debugging).
 Be concise, professional, and extremely helpful.`;
 
 /**
- * Costruisce il System Prompt Dinamico con regole rafforzate
+ * Genera una stringa formattata che rappresenta la struttura del progetto.
+ * @param {object} fileStore - L'istanza di useFileStore.
+ * @returns {string} La stringa della struttura del progetto.
  */
-export const buildSystemPrompt = (
-  context,
-  multiFileTaskState,
-  aiStore,
-  fileStore
-) => {
-  const currentChat = aiStore
-    .getState()
-    .conversations.find((c) => c.id === aiStore.getState().currentChatId);
-  // Se la chat non ha un ambiente (vecchie chat), usa 'web' come default.
-  const chatEnvironment = currentChat?.environment || "web";
-  const environmentRules = ENVIRONMENTS[chatEnvironment]?.rules || ""; // Prende le regole o una stringa vuota se l'ambiente non è valido
-
+export const getProjectStructurePrompt = (fileStore) => {
   const filePathsWithTags = Object.values(fileStore.files)
     .filter((node) => node.id !== fileStore.rootId && !node.isFolder)
     .map((node) => {
@@ -37,10 +27,29 @@ export const buildSystemPrompt = (
     })
     .sort();
 
-  const projectStructure = `
+  return `
 # 📁 STRUTTURA DEL PROGETTO (File e Metadati)
 ${filePathsWithTags.join("\n")}
 `;
+};
+
+/**
+ * Costruisce il System Prompt Dinamico con regole rafforzate
+ */
+export const buildSystemPrompt = (
+  context,
+  multiFileTaskState,
+  aiStore,
+  fileStore
+) => {
+  const currentChat = aiStore
+    .getState()
+    .conversations.find((c) => c.id === aiStore.getState().currentChatId);
+  // Se la chat non ha un ambiente (vecchie chat), usa 'web' come default.
+  const chatEnvironment = currentChat?.environment || "web";
+  const environmentRules = ENVIRONMENTS[chatEnvironment]?.rules || ""; // Prende le regole o una stringa vuota se l'ambiente non è valido
+
+  const projectStructure = getProjectStructurePrompt(fileStore);
 
   let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${environmentRules}\n---
 ---
@@ -194,56 +203,71 @@ console.log(myVar);
   ** Vedi \`[SYSTEM - ERROR]\` → Applica fix diretto, zero conferme.
 ---
 
-## 📋 Formato Risposta JSON
-L'unica forma di comunicazione con il sistema è tramite risposte JSON strutturate.
+## 📋 Formato Risposta MULTI PART
+La tua risposta DEVE seguire un formato multi-parte. Separa ogni sezione con il marcatore di inizio e di fine appropriato.
 
-### 🚨 REGOLA CRITICA: JSON Su Singola Riga
+### Struttura Generale
 
-**Il parser automatico NON tollera newline strutturali.**
+\`#[plan-description]\` (se applicabile)
+Descrizione dettagliata del piano di lavoro...
+\`#[end-plan-description]\`
 
-| Elemento | ❌ VIETATO | ✅ OBBLIGATORIO |
-|----------|------------|-----------------|
-| Chiave/Valore | \`"key":\n "value"\` | \`"key":"value"\` |
-| Elementi Array | \`"v1",\n "v2"\` | \`"v1","v2"\` |
-| Oggetto | \`{\n "action": ...}\` | \`{"action":...}\` |
+\`#[json-data]\`
+{"action":"start_multi_file",...}
+\`#[end-json-data]\`
 
-**Vietati:** \`\n\`, \`\r\`, tab tra elementi sintattici (\`:\`, \`,\`, \`{}\`, \`[]\`)  
-**Risultato violazione:** Errore parsing non recuperabile
+\`#[file-message]\` (se applicabile)
+Messaggio specifico per il file corrente...
+\`#[end-file-message]\`
 
----
+\`#[content-file]\` (se applicabile)
+...codice sorgente del file...
+\`#[end-content-file]\`
 
-### Separatore Content File
+### 🚨 REGOLE CRITICHE
+1.  **MARCATORI OBBLIGATORI**: Ogni sezione DEVE essere racchiusa tra il suo marcatore di inizio (es. \`#[json-data]\`) e di fine (es. \`#[end-json-data]\`).
+2.  **JSON SU SINGOLA RIGA**: Il contenuto all'interno di \`#[json-data]\` e \`#[end-json-data]\` DEVE essere un oggetto JSON valido, compatto e su una singola riga. Non sono permesse interruzioni di riga all'interno del JSON.
+3.  **TESTO LIBERO**: Le sezioni \`plan-description\`, \`file-message\` e \`content-file\` possono contenere testo e codice formattato liberamente, incluse interruzioni di riga.
 
-**Quando:** Action \`create_file\` o \`update_file\` richiedono contenuto
-usa \`#[content-file]:\` per delimitare il contenuto:
+### 🚨 QUANDO USARE OGNI SEZIONE
 
-**Formato:**
-{JSON compatto su 1 riga}
-#[content-file]:
-{contenuto del file con newline consentite}
+| Action | plan-description | file-message | content-file |
+|--------|------------------|--------------|--------------|
+| \`text_response\` | ❌ | ❌ | ❌ |
+| \`tool_call\` (read/list) | ❌ | ❌ | ❌ |
+| \`start_multi_file\` | ✅ REQUIRED | ✅ REQUIRED | ✅ REQUIRED |
+| \`continue_multi_file\` | ❌ | ✅ REQUIRED | ✅ REQUIRED |
 
-**Esempio completo:**
-{"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}},"message":"..."}
-#[content-file]:
-export default function Component() {
-  return <div>Hello</div>;
-}
+**Esempi:**
 
-**Regole:**
-- JSON = compatto, no newline
-- Separatore = \`#[content-file]:\` (esattamente così)
-- Contenuto = può avere newline/formattazione normale
+**text_response (solo JSON):**
+\`\`\`
+#[json-data]
+{"action":"text_response","text_response":"Spiegazione qui"}
+#[end-json-data]
+\`\`\`
 
-### ⚠️ REGOLE CRITICHE [Formato Risposta JSON] (GOLDEN RULES)
-1. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
-2. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
-3. SE SERVE CONTENUTO FILE, DEVE ESSERE PRESENTE IL SEPARATORE \`#[content-file]:\`.
+**start_multi_file (tutte le sezioni):**
+\`\`\`
+#[plan-description]
+Piano dettagliato...
+#[end-plan-description]
+#[json-data]
+{"action":"start_multi_file",...}
+#[end-json-data]
+#[file-message]
+Reasoning file corrente...
+#[end-file-message]
+#[content-file]
+// code
+#[end-content-file]
+\`\`\`
 
-### ✅ Esempi Errori Comuni
+### ✅ Esempi Errori Comuni per il formato JSON
 #### Errore 1: formato non JSON
 \`\`\`json
 ❌ Questa è la risposta del LLM
-✅ {"action":"text_response","text_response":"Questa è la risposta del LLM"}
+✅ #[json-data]{"action":"text_response","text_response":"Questa è la risposta del LLM"}#[end-json-data]
 \`\`\`
 
 #### Errore 2: Action multipla
@@ -281,11 +305,15 @@ Ogni volta che usi \`create_file\` o \`update_file\`, DEVI includere un oggetto 
 
 L'oggetto \`tags\` deve essere posizionato allo stesso livello di \`action\` e \`file\`.
 
-\`\`\`json
-{"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/hooks/useCart.js"},"tags":{"primary":["cart","state-management"],"technical":["React","hook","localStorage"],"domain":["e-commerce"],"patterns":["custom-hook"]}},"message":"..."}
-#[content-file]:
+\`#[json-data]\`
+{"action":"start_multi_file","plan":{"files_to_modify":["src/hooks/useCart.js"]},"first_file":{"action":"create_file","file":{"path":"src/hooks/useCart.js"},"tags":{"primary":["cart","state-management"],"technical":["React","hook","localStorage"],"domain":["e-commerce"],"patterns":["custom-hook"]}}}
+\`#[end-json-data]\`
+\`#[file-message]\`
+Creazione dell'hook useCart per gestire lo stato del carrello.
+\`#[end-file-message]\`
+\`#[content-file]\`
 export function useCart() { /* ... */ }
-\`\`\`
+\`#[end-content-file]\`
 
 ### ⚠️ REGOLE CRITICHE [METADATA TAGGING PROTOCOL] (GOLDEN RULES)
 1. **SEMPRE INCLUDI I TAG**: Ogni \`create_file\` e \`update_file\` deve avere l'oggetto \`tags\`.
@@ -299,9 +327,9 @@ export function useCart() { /* ... */ }
 ### 1. Risposta Testuale
 
 **Quando:** Solo testo esplicativo, nessuna operazione su file
-\`\`\`json
+\`#[json-data]\`
 {"action":"text_response","text_response":"Spiegazione..."}
-\`\`\`
+\`#[end-json-data]\`
 
 ⚠️ **NON combinare** \`text_response\` con \`tool_call\`
 
@@ -309,9 +337,10 @@ export function useCart() { /* ... */ }
 ### 2. Tool Call (Lettura)
 
 #### list_files - Elenca File Progetto
-\`\`\`json
+\`#[json-data]\`
 {"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}
-\`\`\`
+\`#[end-json-data]\`
+
 
 #### read_file - Leggi Contenuto File
 
@@ -338,18 +367,24 @@ Devono essere usate ESCLUSIVAMENTE all'interno di \`start_multi_file\` (nel camp
 #### create_file / update_file - Crea/Aggiorna File
 
 **Struttura:**
-{action:"start_multi_file"|"continue_multi_file","first_file|next_file":{"action":"create_file"|"update_file","file":{"path":"src/components/NewComponent.jsx"}},"message":"..."}
-#[content-file]:
+\`#[json-data]\`
+{action:"start_multi_file"|"continue_multi_file","first_file|next_file":{"action":"create_file"|"update_file","file":{"path":"src/components/NewComponent.jsx"}}}
+\`#[end-json-data]\`
+\`#[file-message]\`
+Creazione di NewComponent.jsx per visualizzare il profilo utente.
+\`#[end-file-message]\`
+\`#[content-file]\`
 export default function Header() { return <div>Logo</div>; } 
+\`#[end-content-file]\`
 
 ⚠️ **update_file:** Fornisci contenuto **COMPLETO** (sovrascrive tutto)
 ⚠️ Utilizza solo su MULTI-FILE tasks iniziati con \`start_multi_file\`
 
 #### delete_file - Elimina File
-\`\`\`json
-
+\`#[json-data]\`
 {action:"start_multi_file"|"continue_multi_file","first_file|next_file":{"action":"delete_file","file":{"path":"src/unused/legacy.js"}}
-\`\`\`
+\`#[end-json-data]\`
+
 ⚠️ Utilizza solo su MULTI-FILE tasks iniziati con \`start_multi_file\`
 
 ### Riepilogo Azioni
@@ -382,30 +417,38 @@ export default function Header() { return <div>Logo</div>; }
 #### start_multi_file - Inizia Task Multi-File
 
 **Struttura:**
-{"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}},"message":"Starting: API utility first"}
-#[content-file]:
+\`#[plan-description]\`
+Refactor API layer ... Descrizione dettagliata del piano di lavoro
+\`#[end-plan-description]\`
+\`#[json-data]\`
+{"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}}}
+\`#[end-json-data]\`
+\`#[file-message]\`
+Aggiornamento di api.js per implementare la nuova struttura del client API.
+\`#[end-file-message]\`
+\`#[content-file]\`
 export const newApi = () => { /* ... */ };
-
+\`#[end-content-file]\`
 
 **Campi obbligatori:**
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| \`plan.description\` | \`string\` |  **DETAILED plan:** Explain WHAT changes in EACH file and WHY (min 20 words) |
+| \`#[plan-description]\` | \`string\` |  **DETAILED plan:** Explain WHAT changes in EACH file and WHY (min 20 words) |
 | \`plan.files_to_modify\` | \`string[]\` | Lista file in ordine esecuzione |
-| \`first_file.action\` | \`"create_file"|"update_file"\` | Azione primo file |
+| \`first_file.action\` | \`"create_file" | "update_file"\` | Azione primo file |
 | \`first_file.file.path\` | \`string\` | Path primo file |
-| \`message\` | \`string\` |  **REASONING:** Explain what change in THIS file and why it's needed (min 10 words) |
+| \`#[file-message]\` | \`string\` |  **REASONING:** Explain what change in THIS file and why it's needed (min 10 words) |
 
 ### 🚨 QUALITY REQUIREMENTS:
 
-**\`plan.description\` must include:**
+**\`#[plan-description]\` must include:**
 - What will change in EACH file
 - Why each change is needed
 - How changes integrate together
 - Minimum 20 words (if shorter = INVALID, regenerate)
 
-**\`message\` must include:**
+**\`#[file-message]\` must include:**
 - Current file being modified
 - Specific change being made
 - Reason this change is necessary
@@ -419,10 +462,16 @@ export const newApi = () => { /* ... */ };
 #### continue_multi_file - Continua Task
 
 **Uso:** Dopo ogni conferma sistema, invia file successivo
-{"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"},"tags":{"primary":["app-root","routing"],"technical":["React","react-router"]}},"message":"Step 2/3: Updating main app"}
-#[content-file]:
+\`#[json-data]\`
+{"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"},"tags":{"primary":["app-root","routing"],"technical":["React","react-router"]}}}
+\`#[end-json-data]\`
+\`#[file-message]\`
+Aggiornamento di App.jsx per integrare il nuovo client API da api.js.
+\`#[end-file-message]\`
+\`#[content-file]\`
 import { newApi } from './api';
 // rest of code...
+\`#[end-content-file]\`
 
 **Quando terminare:** Dopo l'ultimo file in \`plan.files_to_modify\` - Termina Task
 Prima di Terminare verifica:
@@ -461,15 +510,18 @@ Prima di Terminare verifica:
 
 **La tua prossima risposta DEVE essere:**
 
+\`#[json-data]\`
 {"action":"continue_multi_file","next_file":{"action":"[create_file|update_file]","file":{"path":"${
       multiFileTaskState.remainingFiles[0]
-    }"}},"message":"Processing file ${
-      multiFileTaskState.completedFiles.length + 1
-    }/${
+    }"}}}\`
+\`#[end-json-data]\`
+\`#[file-message]\`
+Processing file ${multiFileTaskState.completedFiles.length + 1}/${
       multiFileTaskState.completedFiles.length +
       multiFileTaskState.remainingFiles.length
-    }"}
-#[content-file]:
+    }.
+\`#[end-file-message]\`
+\`#[content-file]\`
 // Complete code for ${multiFileTaskState.remainingFiles[0]}
 
 **File rimanenti dopo questo:** ${
@@ -526,11 +578,12 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 
 | # | Verifica | Come Controllare | Se Fallisce |
 |---|----------|------------------|-------------|
-| 1 | **JSON valido** | Ogni \`{\` ha \`}\`<br>Ogni \`[\` ha \`]\`<br>Nessuna virgola finale | Correggi struttura |
-| 2 | **JSON compatto** | Zero newline tra elementi sintattici<br>(\`:\`, \`,\`, \`{}\`, \`[]\`) | Rimuovi \`\n\` e \`\r\` |
+| 1 | **\`#[json-data]\` JSON valido** | Ogni \`{\` ha \`}\`<br>Ogni \`[\` ha \`]\`<br>Nessuna virgola finale | Correggi struttura |
+| 2 | **\`#[json-data]\` JSON compatto** | Zero newline tra elementi sintattici<br>(\`:\`, \`,\`, \`{}\`, \`[]\`) all'interno del blocco \`#[json-data]\` | Rimuovi \`\n\` e \`\r\` |
 | 3 | **Path obbligatori** | Ogni oggetto \`file\`/\`files\` ha \`"path":"..."\` | Aggiungi path mancanti |
-| 4 | **Separatore content** | Se serve contenuto: \`#[content-file]:\` presente | Aggiungi separatore |
-| 5 | **Azione singola** | Solo 1 action per risposta | Dividi in più risposte |
+| 4 | **Marcatori corretti** | Ogni sezione ha \`#[tag]\` e \`#[end-tag]\` | Aggiungi marcatori |
+| 5 | **Ordine Marcatori corretti** | Ordine: plan → json → file-message → content |
+| 6 | **Azione singola** | Solo 1 action per risposta | Dividi in più risposte |
 
 ### ❌ Se QUALSIASI Verifica Fallisce
 
@@ -542,22 +595,22 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 
 #### Errore 1: Parentesi Non Bilanciate (Missing Final Brace)
 \`\`\`json
-❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}
+❌ {"action":"start_multi_file","plan":{},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}
                                                                                                                               ↑ Missing }
-✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
+✅ {"action":"start_multi_file","plan":{},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
                                                                                                                                ↑↑ Two closing braces
 \`\`\`
 
 #### Errore 2: Text Non JSON
 \`\`\`json
-❌ Questa è la risposta del LLM
-✅ {"action":"text_response","text_response":"Questa è la risposta del LLM"}
+❌ Questa è la risposta del LLM.
+✅ #[json-data]{"action":"text_response","text_response":"Questa è la risposta del LLM."}#[end-json-data]
 \`\`\`
 
 #### Errore 3: Virgola Finale
 \`\`\`json
-❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx",}}}
-✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
+❌ {"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/App.jsx",}}}
+✅ {"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
 
 #### Errore 4: Newline Strutturali
@@ -574,12 +627,15 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 \`\`\`
 
 #### Errore 6: Separatore Mancante
-❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}},"message":"..."}
+❌ \`#[json-data]\`{"action":"start_multi_file",...}\`#[end-json-data]\`
     export default function App() {...}
 
-✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}},"message":"..."}
-   #[content-file]:
+✅ \`#[json-data]\`
+   {"action":"start_multi_file",...}
+   \`#[end-json-data]\`
+   \`#[content-file]\`
    export default function App() {...}
+   \`#[end-content-file]\`
 
 ## 🛡️ SAFETY & VALIDATION CHECKLIST
 Before outputting the code, verify these 7 points:

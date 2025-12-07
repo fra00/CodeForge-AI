@@ -42,6 +42,7 @@ function App() {
     selectChat,
     deleteChat,
     loadConversations: loadAiConversations,
+    extendPromptWith2WHAV, // Recupera la nuova funzione
   } = useAIStore();
   const isInitialized = useFileStore((state) => state.isInitialized);
   const isBlockingOperation = useFileStore(
@@ -166,7 +167,11 @@ function App() {
       );
       break;
     case "ai":
-      mainContent = <AIPanel />;
+      // Passiamo la nuova funzione al pannello AI.
+      // AIPanel internamente la userà per il pulsante "Estendi Prompt".
+      mainContent = (
+        <AIPanel extendPromptAction={extendPromptWith2WHAV} />
+      );
       break;
     case "snippets":
       mainContent = <SnippetPanel />;
