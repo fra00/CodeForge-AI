@@ -108,12 +108,12 @@ The system implements a [FSM / BEHAVIOUR TREE / RULESET].
 
 ## ⚙️ Phase 3: HOW - Part A (Generation Rules) [ALWAYS REQUIRED]
 
-> **Purpose:** Define syntactic rules, forbidden patterns, and exact scaffolding.
+> **Purpose:** Define syntactic rules, forbidden patterns.
 
 ### Template
 
 \`\`\`markdown
-## HOW: Generation (Syntax Rules and Scaffolding)
+## HOW: Generation (Syntax Rules )
 
 ### Mandatory Rules
 
@@ -126,14 +126,6 @@ The system implements a [FSM / BEHAVIOUR TREE / RULESET].
 
 - ❌ Arrow functions (\`=>\`) [if ES5 target]
 - ❌ \`let\` / \`const\` keywords [if ES5 target]
-
-### Scaffolding (EXACT TEMPLATE)
-
-\`\`\`[LANGUAGE]
-[Provide complete, copy-pasteable template]
-\`\`\`
-
-\`\`\`
 
 ---
 
