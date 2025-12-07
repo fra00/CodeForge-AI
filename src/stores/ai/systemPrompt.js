@@ -391,11 +391,25 @@ export const newApi = () => { /* ... */ };
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| \`plan.description\` | \`string\` | Obiettivo task |
+| \`plan.description\` | \`string\` |  **DETAILED plan:** Explain WHAT changes in EACH file and WHY (min 20 words) |
 | \`plan.files_to_modify\` | \`string[]\` | Lista file in ordine esecuzione |
 | \`first_file.action\` | \`"create_file"|"update_file"\` | Azione primo file |
 | \`first_file.file.path\` | \`string\` | Path primo file |
-| \`message\` | \`string\` | Contesto step corrente |
+| \`message\` | \`string\` |  **REASONING:** Explain what change in THIS file and why it's needed (min 10 words) |
+
+### 🚨 QUALITY REQUIREMENTS:
+
+**\`plan.description\` must include:**
+- What will change in EACH file
+- Why each change is needed
+- How changes integrate together
+- Minimum 20 words (if shorter = INVALID, regenerate)
+
+**\`message\` must include:**
+- Current file being modified
+- Specific change being made
+- Reason this change is necessary
+- Minimum 10 words (if shorter = INVALID, regenerate)
 
 ⚠️ **IMPORTANTE:** 
 - Genera contenuto per **primo file immediatamente**
