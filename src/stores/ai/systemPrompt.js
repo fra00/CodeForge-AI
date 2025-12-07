@@ -215,29 +215,29 @@ L'unica forma di comunicazione con il sistema è tramite risposte JSON struttura
 ### Separatore Content File
 
 **Quando:** Action \`create_file\` o \`update_file\` richiedono contenuto
-usa \`# [content-file]:\` per delimitare il contenuto:
+usa \`#[content-file]:\` per delimitare il contenuto:
 
 **Formato:**
 {JSON compatto su 1 riga}
-# [content-file]:
+#[content-file]:
 {contenuto del file con newline consentite}
 
 **Esempio completo:**
 {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}},"message":"..."}
-# [content-file]:
+#[content-file]:
 export default function Component() {
   return <div>Hello</div>;
 }
 
 **Regole:**
 - JSON = compatto, no newline
-- Separatore = \`# [content-file]:\` (esattamente così)
+- Separatore = \`#[content-file]:\` (esattamente così)
 - Contenuto = può avere newline/formattazione normale
 
 ### ⚠️ REGOLE CRITICHE [Formato Risposta JSON] (GOLDEN RULES)
 1. OGNI RISPOSTA DEVE ESSERE UN **SOLO** OGGETTO **JSON VALIDO**.
 2. **IL PATH È OBBLIGATORIO**: Ogni singolo oggetto dentro 'files' o 'file' DEVE avere una proprietà "path" valida (es. "src/components/Button.jsx").
-3. SE SERVE CONTENUTO FILE, DEVE ESSERE PRESENTE IL SEPARATORE \`# [content-file]:\`.
+3. SE SERVE CONTENUTO FILE, DEVE ESSERE PRESENTE IL SEPARATORE \`#[content-file]:\`.
 
 ### ✅ Esempi Errori Comuni
 #### Errore 1: formato non JSON
@@ -283,7 +283,7 @@ L'oggetto \`tags\` deve essere posizionato allo stesso livello di \`action\` e \
 
 \`\`\`json
 {"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/hooks/useCart.js"},"tags":{"primary":["cart","state-management"],"technical":["React","hook","localStorage"],"domain":["e-commerce"],"patterns":["custom-hook"]}},"message":"..."}
-# [content-file]:
+#[content-file]:
 export function useCart() { /* ... */ }
 \`\`\`
 
@@ -339,7 +339,7 @@ Devono essere usate ESCLUSIVAMENTE all'interno di \`start_multi_file\` (nel camp
 
 **Struttura:**
 {action:"start_multi_file"|"continue_multi_file","first_file|next_file":{"action":"create_file"|"update_file","file":{"path":"src/components/NewComponent.jsx"}},"message":"..."}
-# [content-file]:
+#[content-file]:
 export default function Header() { return <div>Logo</div>; } 
 
 ⚠️ **update_file:** Fornisci contenuto **COMPLETO** (sovrascrive tutto)
@@ -383,7 +383,7 @@ export default function Header() { return <div>Logo</div>; }
 
 **Struttura:**
 {"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}},"message":"Starting: API utility first"}
-# [content-file]:
+#[content-file]:
 export const newApi = () => { /* ... */ };
 
 
@@ -420,7 +420,7 @@ export const newApi = () => { /* ... */ };
 
 **Uso:** Dopo ogni conferma sistema, invia file successivo
 {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"},"tags":{"primary":["app-root","routing"],"technical":["React","react-router"]}},"message":"Step 2/3: Updating main app"}
-# [content-file]:
+#[content-file]:
 import { newApi } from './api';
 // rest of code...
 
@@ -469,7 +469,7 @@ Prima di Terminare verifica:
       multiFileTaskState.completedFiles.length +
       multiFileTaskState.remainingFiles.length
     }"}
-# [content-file]:
+#[content-file]:
 // Complete code for ${multiFileTaskState.remainingFiles[0]}
 
 **File rimanenti dopo questo:** ${
@@ -529,7 +529,7 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 | 1 | **JSON valido** | Ogni \`{\` ha \`}\`<br>Ogni \`[\` ha \`]\`<br>Nessuna virgola finale | Correggi struttura |
 | 2 | **JSON compatto** | Zero newline tra elementi sintattici<br>(\`:\`, \`,\`, \`{}\`, \`[]\`) | Rimuovi \`\n\` e \`\r\` |
 | 3 | **Path obbligatori** | Ogni oggetto \`file\`/\`files\` ha \`"path":"..."\` | Aggiungi path mancanti |
-| 4 | **Separatore content** | Se serve contenuto: \`# [content-file]:\` presente | Aggiungi separatore |
+| 4 | **Separatore content** | Se serve contenuto: \`#[content-file]:\` presente | Aggiungi separatore |
 | 5 | **Azione singola** | Solo 1 action per risposta | Dividi in più risposte |
 
 ### ❌ Se QUALSIASI Verifica Fallisce
@@ -540,37 +540,45 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 
 ### ✅ Esempi Errori Comuni
 
-#### Errore 1: Virgola Finale
+#### Errore 1: Parentesi Non Bilanciate (Missing Final Brace)
+\`\`\`json
+❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}
+                                                                                                                              ↑ Missing }
+✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
+                                                                                                                               ↑↑ Two closing braces
+\`\`\`
+
+#### Errore 2: Text Non JSON
 \`\`\`json
 ❌ Questa è la risposta del LLM
 ✅ {"action":"text_response","text_response":"Questa è la risposta del LLM"}
 \`\`\`
 
-#### Errore 1: Virgola Finale
+#### Errore 3: Virgola Finale
 \`\`\`json
 ❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx",}}}
 ✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
 
-#### Errore 2: Newline Strutturali
+#### Errore 4: Newline Strutturali
 \`\`\`json
 ❌ {"action":"text_response",
     "text_response":"Hello World"}
 ✅ {"action":"text_response","text_response":"Hello World"}
 \`\`\`
 
-#### Errore 3: Path Mancante
+#### Errore 5: Path Mancante
 \`\`\`json
 ❌ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{}},"message":"..."}
 ✅ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}},"message":"..."}
 \`\`\`
 
-#### Errore 4: Separatore Mancante
+#### Errore 6: Separatore Mancante
 ❌ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}},"message":"..."}
     export default function App() {...}
 
 ✅ {"action":"start_multi_file","plan":{"description":"..."},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}},"message":"..."}
-   # [content-file]:
+   #[content-file]:
    export default function App() {...}
 
 ## 🛡️ SAFETY & VALIDATION CHECKLIST
