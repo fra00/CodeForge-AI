@@ -539,7 +539,7 @@ export const useAIStore = create((set, get) => ({
           ),
         },
       }));
-
+      return true;
       // return await get()._checkForRuntimeErrors();
     } catch (e) {
       addMessage({
@@ -720,7 +720,8 @@ export const useAIStore = create((set, get) => ({
           // 🛡️ FILTRO API: Rimuove messaggi di sistema e di stato
           .filter((m) => m.role !== "system" && m.role !== "status")
           .filter((m) => m.content && m.content.toString().trim().length > 0)
-          .slice(-20); // Prendi solo gli ultimi 20 messaggi
+          //.slice(-20); // Prendi solo gli ultimi 20 messaggi
+          .slice(-10); // Prendi solo gli ultimi 20 messaggi
 
         // Prepara il payload finale per l'API
         const messagesForLLM = [

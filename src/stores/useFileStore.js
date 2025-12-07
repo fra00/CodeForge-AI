@@ -306,7 +306,13 @@ export const useFileStore = create((set, get) => ({
   /**
    * Crea un nuovo file o cartella.
    */
-  createFileOrFolder: (parentId, name, isFolder = false, content = "", tags = {}) => {
+  createFileOrFolder: (
+    parentId,
+    name,
+    isFolder = false,
+    content = "",
+    tags = {}
+  ) => {
     const state = get();
     const parent = state.files[parentId];
     if (!parent || !parent.isFolder) {
@@ -524,7 +530,9 @@ export const useFileStore = create((set, get) => ({
     // Comportamento UPSERT: se il file esiste, lo aggiorniamo con contenuto e tag.
     if (existingNode && !existingNode.isFolder) {
       updateFileContent(existingNode.id, content, tags);
-      return { message: `✓ File ${fullPath} updated with new content and tags.` };
+      return {
+        message: `✓ File ${fullPath} updated with new content and tags.`,
+      };
     }
     if (existingNode && existingNode.isFolder) {
       throw new Error(
@@ -582,7 +590,7 @@ export const useFileStore = create((set, get) => ({
     try {
       if (actionType === "create_file") {
         _createNodeFromPath(normalizedPath, content, tags);
-        return `✓ File ${normalizedPath} created.`;
+        return `✓ File ${normalizedPath} created. \n\n Content: ${content}`;
       } else if (actionType === "update_file") {
         const existingNode = findNodeByPath(state.files, normalizedPath);
         if (!existingNode) {
@@ -594,7 +602,7 @@ export const useFileStore = create((set, get) => ({
           return `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`;
         }
         updateFileContent(existingNode.id, content, tags);
-        return `✓ File ${normalizedPath} updated.`;
+        return `✓ File ${normalizedPath} updated. \n\n New Content: ${content}`;
       } else if (actionType === "delete_file") {
         const existingNode = findNodeByPath(state.files, normalizedPath);
         if (!existingNode) {
