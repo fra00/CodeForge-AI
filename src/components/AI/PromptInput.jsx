@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
+import { useAIStore } from "../../stores/useAIStore";
 import { Send, Loader2, StopCircle, Sparkles } from "lucide-react";
 import Textarea from "../ui/Textarea";
 import Button from "../ui/Button";
@@ -15,8 +16,10 @@ export function PromptInput({
   isGenerating,
   initialPrompt,
 }) {
+export function PromptInput({ onSend, onExtend, onStop, isGenerating }) {
   const [prompt, setPrompt] = useState("");
   const [isExtending, setIsExtending] = useState(false);
+  const consumeInitialPrompt = useAIStore((state) => state.consumeInitialPrompt);
   const textareaRef = useRef(null);
 
   const handleSend = useCallback(() => {
@@ -65,10 +68,12 @@ export function PromptInput({
 
   // Imposta il prompt se viene fornito un valore iniziale
   useEffect(() => {
+    const initialPrompt = consumeInitialPrompt();
     if (initialPrompt) {
       setPrompt(initialPrompt);
     }
   }, [initialPrompt]);
+  }, [consumeInitialPrompt]);
 
   return (
     <div className="flex flex-col p-4 border-t border-editor-border bg-editor-darker">
