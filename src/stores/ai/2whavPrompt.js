@@ -50,7 +50,6 @@ Apply 2WHAV [MODE] to: [TASK DESCRIPTION]
 
 ### Template
 
-\`\`\`markdown
 ## WHAT: Objective
 
 ### Role and Task
@@ -58,9 +57,6 @@ Apply 2WHAV [MODE] to: [TASK DESCRIPTION]
 You are a [DOMAIN EXPERT]. Your task is to [SPECIFIC TASK].
 
 ### Expected Output
-
-The output MUST be [EXACT FORMAT].
-[Additional format specifications]
 
 ### Operational Constraints
 
@@ -227,5 +223,5 @@ Before providing the output, verify the code satisfies ALL requirements below:
 ### Final Assertion
 
 - [ ] **The code can be executed immediately with no modifications?**
-\`\`\`
+
 `;
