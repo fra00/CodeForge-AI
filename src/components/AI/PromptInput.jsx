@@ -8,7 +8,13 @@ import Button from "../ui/Button";
  * Componente per l'input del prompt dell'AI Assistant.
  * Include auto-resize, invio, estensione del prompt e stop.
  */
-export function PromptInput({ onSend, onExtend, onStop, isGenerating }) {
+export function PromptInput({
+  onSend,
+  onExtend,
+  onStop,
+  isGenerating,
+  initialPrompt,
+}) {
   const [prompt, setPrompt] = useState("");
   const [isExtending, setIsExtending] = useState(false);
   const textareaRef = useRef(null);
@@ -56,6 +62,13 @@ export function PromptInput({ onSend, onExtend, onStop, isGenerating }) {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [prompt]);
+
+  // Imposta il prompt se viene fornito un valore iniziale
+  useEffect(() => {
+    if (initialPrompt) {
+      setPrompt(initialPrompt);
+    }
+  }, [initialPrompt]);
 
   return (
     <div className="flex flex-col p-4 border-t border-editor-border bg-editor-darker">
@@ -121,4 +134,5 @@ PromptInput.propTypes = {
   onExtend: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   isGenerating: PropTypes.bool.isRequired,
+  initialPrompt: PropTypes.string,
 };

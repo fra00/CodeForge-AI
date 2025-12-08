@@ -236,6 +236,7 @@ export const useAIStore = create((set, get) => ({
       if (
         !message ||
         !message.content ||
+        typeof message.content !== "string" ||
         message.content.toString().trim() === ""
       ) {
         console.warn("⚠️ [useAIStore] Messaggio vuoto scartato:", message);

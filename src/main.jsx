@@ -5,8 +5,6 @@ import "./index.css";
 import { useFileStore } from "./stores/useFileStore.js";
 import { useSettingsStore } from "./stores/useSettingsStore.js";
 
-
-
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />

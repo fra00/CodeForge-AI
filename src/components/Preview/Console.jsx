@@ -54,19 +54,34 @@ export function ConsolePanel({ logs, onClear }) {
         {logs.length === 0 ? (
           <div className="text-editor-border">Console vuota.</div>
         ) : (
-          logs.map((log, index) => (
-            <div
-              key={index}
-              className={`flex items-start p-1 rounded border ${getLogStyle(log.type)}`}
-            >
-              <div className="flex-shrink-0 mr-2 mt-0.5">
-                {getLogIcon(log.type)}
+          logs.map((log, index) => {
+            const isError = log.type === "error";
+            const errorMessage = log.data.join(" ");
+
+            const handleClick = () => {
+              if (isError && window.projectContext?.handleErrorClick) {
+                window.projectContext.handleErrorClick(errorMessage);
+              }
+            };
+
+            return (
+              <div
+                key={index}
+                className={`flex items-start p-1 rounded border ${getLogStyle(
+                  log.type
+                )} ${isError ? "cursor-pointer hover:bg-red-900/80" : ""}`}
+                onClick={handleClick}
+                title={isError ? "Debug this error with AI" : ""}
+              >
+                <div className="flex-shrink-0 mr-2 mt-0.5">
+                  {getLogIcon(log.type)}
+                </div>
+                <div className="flex-1 whitespace-pre-wrap break-words">
+                  {errorMessage}
+                </div>
               </div>
-              <div className="flex-1 whitespace-pre-wrap break-words">
-                {log.data.join(" ")}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={logsEndRef} />
       </div>

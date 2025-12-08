@@ -62,6 +62,7 @@ function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [activePanel, setActivePanel] = useState("editor");
+  const [initialPrompt, setInitialPrompt] = useState("");
 
   // Lo stato showFileExplorer non è più necessario, la visibilità è gestita da useSettingsStore
 
@@ -82,8 +83,18 @@ function App() {
       window.projectContext.lastIframeError = message;
     };
 
+    // Funzione per gestire il click su un errore nella console
+    window.projectContext.handleErrorClick = (errorMessage) => {
+      setActivePanel("ai"); // Passa al pannello AI
+      setInitialPrompt(errorMessage); // Imposta il prompt iniziale
+    };
+
     return () => {
       if (window.handleIframeError) delete window.handleIframeError;
+      // Pulisce la funzione quando il componente viene smontato
+      if (window.projectContext.handleErrorClick) {
+        delete window.projectContext.handleErrorClick;
+      }
     };
   }, []);
 
@@ -170,7 +181,10 @@ function App() {
       // Passiamo la nuova funzione al pannello AI.
       // AIPanel internamente la userà per il pulsante "Estendi Prompt".
       mainContent = (
-        <AIPanel extendPromptAction={extendPromptWith2WHAV} />
+        <AIPanel
+          extendPromptAction={extendPromptWith2WHAV}
+          initialPrompt={initialPrompt}
+        />
       );
       break;
     case "snippets":

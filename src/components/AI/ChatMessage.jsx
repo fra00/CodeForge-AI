@@ -37,13 +37,30 @@ export function ChatMessage({ message, onDeleteMessage }) {
         />
         <div className="flex-1 overflow-hidden">
           <div className="prose prose-sm prose-invert max-w-none text-white">
-            <ReactMarkdown
-              components={{
-                code: ({ node, ...props }) => <CodeBlock {...props} />,
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+            {/* 🛡️ GUARDIA: Renderizza solo se il contenuto è una stringa valida */}
+            {typeof message.content === "string" &&
+            message.content.trim() !== "" ? (
+              <ReactMarkdown
+                components={{
+                  // 🎯 FIX: Mappatura corretta delle props
+                  code: ({ node, inline, className, children, ...props }) => {
+                    const match = /language-(\w+)/.exec(className || "");
+                    return !inline && match ? (
+                      <CodeBlock
+                        language={match[1]}
+                        code={String(children).replace(/\n$/, "")}
+                      />
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            ) : null}
           </div>
         </div>
       </div>
