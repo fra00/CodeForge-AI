@@ -1,15 +1,16 @@
 - every N call minimize context to minime use of token , minimize and optimize token
 - dinamic prompt . add rule based on request prompt (use plan to do this?)
-- read console for error after finish insert/modify file (fix)
-- 2WHAV area?
+- read console for error after finish insert/modify file (fix now commented)
+- 2WHAV area (partial implemented only for prompt)?
 - implement merge git or merge chuncked (new)
 - refactor useAiStore
-- add an executution plan before start coding and add message summary execution
 - preview with full height (fixed)
-- remove multi file , use only simple action, is alwais multi file
 - add tool to search string into project file , find all file where string is finded
 - add tool to find a message into history?
 
+- 20251208
+  x add an executution plan before start coding and add message summary execution
+  x remove multi file , use only simple action, is alwais multi file
 - 20251201
   x use react
   x add structure of folder/files to prompt
