@@ -18,7 +18,6 @@ const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
  */
 export function AIPanel({
   extendPromptAction, // Nuova funzione per estendere il prompt
-  initialPrompt, // Prompt iniziale
   ...props
 }) {
   const {
@@ -175,7 +174,6 @@ export function AIPanel({
           onStop={stopGeneration}
           isGenerating={isGenerating}
           onExtend={handleExtendPrompt}
-          initialPrompt={initialPrompt}
         />
       </div>
     </div>

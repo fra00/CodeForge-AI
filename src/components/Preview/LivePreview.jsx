@@ -53,12 +53,18 @@ const convertVfsToSandpackFiles = (vfsFiles, rootId) => {
 
 // --- Componente per Intercettare i Log ---
 // Questo deve stare DENTRO il Provider per funzionare
-const SandpackLogInterceptor = ({ onLog }) => {
+const SandpackLogInterceptor = ({ onLog, onClear }) => {
   const { listen } = useSandpack();
 
   useEffect(() => {
     // listen() ci permette di ascoltare i messaggi dal bundler/iframe
     const unsubscribe = listen((msg) => {
+      // Se Sandpack inizia una nuova esecuzione, puliamo la console.
+      if (msg.type === "done") {
+        onClear();
+        return;
+      }
+
       // 🛡️ GUARDIA DI ROBUSTEZZA:
       // Filtra solo i veri messaggi di console, ignorando gli eventi interni di Sandpack
       // che possono avere type: 'console' ma method non validi (es. 'u' per unmount).
@@ -85,22 +91,24 @@ const SandpackLogInterceptor = ({ onLog }) => {
         // --- GESTIONE ERRORI DI RUNTIME ---
         // Cattura sia gli errori inviati come 'action' (es. ReferenceError)
         // sia quelli inviati come 'error'.
-        const errorPayload = msg.payload || msg.error;
+        // CORREZIONE: Sandpack incapsula l'errore. Estraiamo l'oggetto completo.
+        const errorObject = msg.error || msg.payload;
         onLog({
           type: "error", // Classifichiamo come un errore
-          data: [errorPayload.title || errorPayload.message],
+          // Passiamo l'intero oggetto errore per preservare lo stack trace.
+          data: [errorObject],
           timestamp: new Date().toISOString(),
         });
       }
     });
     return unsubscribe;
-  }, [listen, onLog]);
+  }, [listen, onLog, onClear]);
 
   return null;
 };
 
 // --- Main Component ---
-export function LivePreview({ className = "" }) {
+export function LivePreview({ className = "", onRefresh: onRefreshProp }) {
   const vfsFiles = useFileStore((state) => state.files);
   const rootId = useFileStore((state) => state.rootId);
   const currentChatId = useAIStore((state) => state.currentChatId);
@@ -123,11 +131,22 @@ export function LivePreview({ className = "" }) {
       logItem.type === "error" &&
       typeof window.handleIframeError === "function"
     ) {
-      window.handleIframeError(logItem.data.join(" "));
+      // Modifica: Passiamo il primo elemento di data, che ora è l'oggetto errore.
+      // Aggiungiamo un controllo per assicurarci che esista.
+      const errorObject = logItem.data && logItem.data[0];
+      if (errorObject) {
+        window.handleIframeError(errorObject);
+      }
     }
   }, []);
 
-  const handleClearConsole = useCallback(() => setLogs([]), []);
+  // Funzione unificata per pulire sia la console che gli errori nella status bar.
+  const handleClearConsole = useCallback(() => {
+    setLogs([]);
+    if (onRefreshProp) {
+      onRefreshProp();
+    }
+  }, [onRefreshProp]);
 
   // Esponi la funzione di pulizia della console globalmente per l'AI
   useEffect(() => {
@@ -142,7 +161,8 @@ export function LivePreview({ className = "" }) {
         const errorPayload = event.data.payload;
         handleLog({
           type: "error",
-          data: [errorPayload.message],
+          // CORREZIONE: Passiamo l'intero oggetto payload per preservare lo stack trace
+          data: [errorPayload],
           timestamp: new Date().toISOString(),
         });
       }
@@ -183,7 +203,7 @@ export function LivePreview({ className = "" }) {
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
-    handleClearConsole();
+    handleClearConsole(); // Ora questa funzione fa tutto il lavoro.
   }, [handleClearConsole]);
 
   const template = environment === "react" ? "vite-react" : "static";
@@ -198,7 +218,7 @@ export function LivePreview({ className = "" }) {
     <SandpackPreview
       className="w-full h-full border-none bg-white"
       showOpenInCodeSandbox={false}
-      showRefreshButton={false}
+      showRefreshButton={true}
       showNavigator={true}
     />
   );
@@ -210,8 +230,8 @@ export function LivePreview({ className = "" }) {
       template: template,
       theme: sandpackDark,
       options: { autoReload: true },
-    }),
-    [sandpackFiles, template, handleLog]
+    }), // Rimuoviamo handleLog dalle dipendenze, non è necessario
+    [sandpackFiles, template]
   );
 
   // 2. Define the content for the Popup
@@ -287,15 +307,17 @@ export function LivePreview({ className = "" }) {
             {/* La soluzione corretta è usare la variabile CSS che Sandpack espone per il layout.
                 Questo forza il layout a prendere il 100% dell'altezza del suo contenitore genitore (il div con flex-1). */}
 
-            {/* Applica l'altezza del 100% tramite la variabile CSS nativa di Sandpack. */}
-            <SandpackLayout style={{ "--sp-layout-height": "400px" }}>
+            <SandpackLayout>
               {PreviewComponent}
               {/*
                 Questo intercetta i console.log e alcuni errori.
                 onUncaughtError su SandpackPreview cattura gli altri.
                 Usandoli entrambi abbiamo la massima copertura.
               */}
-              <SandpackLogInterceptor onLog={handleLog} />
+              <SandpackLogInterceptor
+                onLog={handleLog}
+                onClear={handleClearConsole}
+              />
             </SandpackLayout>
           </SandpackProvider>
         )}

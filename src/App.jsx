@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useFileStore } from "./stores/useFileStore";
 import { EditorArea } from "./components/Editor/EditorArea";
 import {
@@ -43,6 +43,7 @@ function App() {
     deleteChat,
     loadConversations: loadAiConversations,
     extendPromptWith2WHAV, // Recupera la nuova funzione
+    setInitialPrompt: setAiInitialPrompt, // Recupera l'azione dallo store
   } = useAIStore();
   const isInitialized = useFileStore((state) => state.isInitialized);
   const isBlockingOperation = useFileStore(
@@ -62,7 +63,7 @@ function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [activePanel, setActivePanel] = useState("editor");
-  const [initialPrompt, setInitialPrompt] = useState("");
+  const [runtimeErrors, setRuntimeErrors] = useState([]);
 
   // Lo stato showFileExplorer non è più necessario, la visibilità è gestita da useSettingsStore
 
@@ -76,17 +77,50 @@ function App() {
   useEffect(() => {
     // Inizializza il contesto globale se non esiste
     window.projectContext = window.projectContext || {}; // Correzione: Garantisce che l'oggetto esista.
-    window.projectContext.lastIframeError = null;
 
-    window.handleIframeError = (message) => {
-      console.log("ERROR LATCHED:", message);
-      window.projectContext.lastIframeError = message;
+    // Modificato per accettare un oggetto errore o una stringa
+    window.handleIframeError = (error) => {
+      console.log("ERROR LATCHED:", error);
+      let formattedMessage;
+      if (typeof error === "object" && error !== null && error.message) {
+        // Caso: è un oggetto Error con message e (forse) stack
+        formattedMessage = error.message;
+        if (error.stack) {
+          const stackSnippet = error.stack.substring(0, 200);
+          formattedMessage += `\n\nStack Trace (snippet):\n${stackSnippet}...`;
+        }
+      } else {
+        // Caso: è una stringa o un altro tipo
+        formattedMessage = String(error);
+      }
+
+      // Aggiunge l'errore alla lista, evitando duplicati esatti
+      setRuntimeErrors((prevErrors) => [
+        ...new Set([...prevErrors, formattedMessage]),
+      ]);
     };
 
     // Funzione per gestire il click su un errore nella console
     window.projectContext.handleErrorClick = (errorMessage) => {
-      setActivePanel("ai"); // Passa al pannello AI
-      setInitialPrompt(errorMessage); // Imposta il prompt iniziale
+      // CORREZIONE: Assicuriamoci di passare sempre una stringa formattata.
+      // Se `errorMessage` è un oggetto Error, lo formattiamo.
+      let finalMessage;
+      if (
+        typeof errorMessage === "object" &&
+        errorMessage !== null &&
+        errorMessage.message
+      ) {
+        finalMessage = errorMessage.message;
+        if (errorMessage.stack) {
+          const stackSnippet = errorMessage.stack.substring(0, 200);
+          finalMessage += `\n\nStack Trace (snippet):\n${stackSnippet}...`;
+        }
+      } else {
+        finalMessage = String(errorMessage);
+      }
+
+      setActivePanel("ai");
+      setAiInitialPrompt(finalMessage); // Notifica lo store con una stringa
     };
 
     return () => {
@@ -96,7 +130,7 @@ function App() {
         delete window.projectContext.handleErrorClick;
       }
     };
-  }, []);
+  }, [setAiInitialPrompt]); // Aggiunta dipendenza
 
   // Sincronizza il tema con l'attributo data-theme sul body
   useEffect(() => {
@@ -128,6 +162,18 @@ function App() {
   // Funzione per triggerare il click sull'input file nascosto
   const triggerImport = () =>
     document.getElementById("import-zip-input")?.click();
+
+  const handleFixError = () => {
+    if (runtimeErrors.length > 0) {
+      const combinedErrors = `Please fix the following ${runtimeErrors.length} error(s):\n\n---\n\n${runtimeErrors.join("\n\n---\n\n")}`;
+      window.projectContext.handleErrorClick(combinedErrors);
+      setRuntimeErrors([]); // Resetta gli errori dopo averli inviati all'AI
+    }
+  };
+
+  const clearRuntimeErrors = useCallback(() => {
+    setRuntimeErrors([]);
+  }, []);
 
   if (!isInitialized) {
     const handleDeleteChat = (chatId) => {
@@ -170,7 +216,7 @@ function App() {
                 defaultSize={100 - editorPreviewSplitSize}
                 minSize={20}
               >
-                <LivePreview />
+                <LivePreview onRefresh={clearRuntimeErrors} />
               </ResizablePanel>
             </>
           )}
@@ -180,12 +226,7 @@ function App() {
     case "ai":
       // Passiamo la nuova funzione al pannello AI.
       // AIPanel internamente la userà per il pulsante "Estendi Prompt".
-      mainContent = (
-        <AIPanel
-          extendPromptAction={extendPromptWith2WHAV}
-          initialPrompt={initialPrompt}
-        />
-      );
+      mainContent = <AIPanel extendPromptAction={extendPromptWith2WHAV} />;
       break;
     case "snippets":
       mainContent = <SnippetPanel />;
@@ -194,7 +235,7 @@ function App() {
       mainContent = <SettingsPanel />;
       break;
     case "live-preview": // Nuovo pannello per la preview a schermo intero su mobile
-      mainContent = <LivePreview />;
+      mainContent = <LivePreview onRefresh={clearRuntimeErrors} />;
       break;
     default:
       mainContent = <AIPanel />;
@@ -243,7 +284,11 @@ function App() {
       </main>
 
       {/* Status Bar (Riutilizzo la StatusBar dell'editor) */}
-      <StatusBar isSaving={isSaving} />
+      <StatusBar
+        isSaving={isSaving}
+        runtimeErrors={runtimeErrors}
+        onFixError={handleFixError}
+      />
     </div>
   );
 }

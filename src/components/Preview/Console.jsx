@@ -56,11 +56,21 @@ export function ConsolePanel({ logs, onClear }) {
         ) : (
           logs.map((log, index) => {
             const isError = log.type === "error";
-            const errorMessage = log.data.join(" ");
+            // Modifica: Gestisce sia stringhe che oggetti errore in log.data
+            const errorObject = isError ? log.data[0] : null;
+            const errorMessage = isError
+              ? errorObject?.message ||
+                (typeof errorObject === "string"
+                  ? errorObject
+                  : JSON.stringify(errorObject))
+              : log.data.join(" ");
 
             const handleClick = () => {
               if (isError && window.projectContext?.handleErrorClick) {
-                window.projectContext.handleErrorClick(errorMessage);
+                // Passa l'oggetto errore se disponibile, altrimenti il messaggio
+                const payload = errorObject || errorMessage;
+                window.projectContext.handleErrorClick(payload);
+                onClear(); // Pulisce la console dopo aver inviato l'errore
               }
             };
 

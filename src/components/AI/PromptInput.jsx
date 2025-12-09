@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
+import { useAIStore } from "../../stores/useAIStore"; // Importa lo store
 import { Send, Loader2, StopCircle, Sparkles } from "lucide-react";
 import Textarea from "../ui/Textarea";
 import Button from "../ui/Button";
@@ -8,15 +9,14 @@ import Button from "../ui/Button";
  * Componente per l'input del prompt dell'AI Assistant.
  * Include auto-resize, invio, estensione del prompt e stop.
  */
-export function PromptInput({
-  onSend,
-  onExtend,
-  onStop,
-  isGenerating,
-  initialPrompt,
-}) {
+export function PromptInput({ onSend, onExtend, onStop, isGenerating }) {
   const [prompt, setPrompt] = useState("");
   const [isExtending, setIsExtending] = useState(false);
+  // CORREZIONE: Selezioniamo i valori dallo store in modo che il componente si ri-renderizzi quando cambiano.
+  const initialPrompt = useAIStore((state) => state.initialPrompt);
+  const consumeInitialPrompt = useAIStore(
+    (state) => state.consumeInitialPrompt
+  );
   const textareaRef = useRef(null);
 
   const handleSend = useCallback(() => {
@@ -63,12 +63,13 @@ export function PromptInput({
     }
   }, [prompt]);
 
-  // Imposta il prompt se viene fornito un valore iniziale
+  // Imposta il prompt se viene fornito un valore iniziale dallo store
   useEffect(() => {
     if (initialPrompt) {
       setPrompt(initialPrompt);
+      consumeInitialPrompt(); // Consuma il prompt dopo averlo usato
     }
-  }, [initialPrompt]);
+  }, [initialPrompt, consumeInitialPrompt]); // Questo effetto si attiva ogni volta che `initialPrompt` cambia.
 
   return (
     <div className="flex flex-col p-4 border-t border-editor-border bg-editor-darker">
@@ -82,7 +83,7 @@ export function PromptInput({
           onKeyDown={handleKeyDown}
           disabled={isLoading}
           ref={textareaRef} // Passa il ref alla textarea interna
-          className="flex-1 resize-none max-h-40"
+          className="flex-1 resize-none max-h-40 overflow-y-auto"
         />
         <div className="ml-3 flex flex-col items-center space-y-2">
           <Button
@@ -134,5 +135,4 @@ PromptInput.propTypes = {
   onExtend: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   isGenerating: PropTypes.bool.isRequired,
-  initialPrompt: PropTypes.string,
 };

@@ -1,86 +1,60 @@
-import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
-import { useFileStore } from '../../stores/useFileStore';
-import { useSettingsStore } from '../../stores/useSettingsStore';
-import { Save, Check, Loader2 } from 'lucide-react';
+import React from "react";
+import PropTypes from "prop-types";
+import { Bug, Save, Loader2 } from "lucide-react";
+import Button from "../ui/Button";
 
 /**
- * Componente per la barra di stato dell'editor.
- * Mostra informazioni sul file attivo, lo stato di salvataggio e le impostazioni.
+ * Barra di stato dell'applicazione.
+ * Mostra lo stato di salvataggio e un pulsante per correggere errori di runtime.
  */
-export function StatusBar({ isSaving }) {
-  const store = useFileStore();
-  const activeFile = useMemo(() => store.getActiveFile(), [store.activeFileId, store.files]);
-  const { theme, fontSize, tabSize } = useSettingsStore();
-
-  // Funzione per formattare la dimensione del file (placeholder)
-  const formatFileSize = (content) => {
-    if (!content) return '0 B';
-    const bytes = new TextEncoder().encode(content).length;
-    if (bytes < 1024) return `${bytes} B`;
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${kb.toFixed(2)} KB`;
-    const mb = kb / 1024;
-    return `${mb.toFixed(2)} MB`;
-  };
-
-  const fileInfo = activeFile ? (
-    <>
-      <span className="mr-4">
-        Lingua: <span className="font-semibold">{activeFile.language.toUpperCase()}</span>
-      </span>
-      <span className="mr-4">
-        Dimensione: <span className="font-semibold">{formatFileSize(activeFile.content)}</span>
-      </span>
-    </>
-  ) : (
-    <span className="mr-4">Nessun file attivo</span>
-  );
-
-  const editorSettings = (
-    <>
-      <span className="mr-4">
-        Tema: <span className="font-semibold">{theme}</span>
-      </span>
-      <span className="mr-4">
-        Font: <span className="font-semibold">{fontSize}px</span>
-      </span>
-      <span className="mr-4">
-        Tab: <span className="font-semibold">{tabSize}</span>
-      </span>
-    </>
-  );
-
-  const saveStatus = isSaving ? (
-    <span className="flex items-center text-yellow-400">
-      <Loader2 size={16} className="animate-spin mr-1" />
-      Salvataggio...
-    </span>
-  ) : activeFile && !activeFile.isDirty ? (
-    <span className="flex items-center text-green-400">
-      <Check size={16} className="mr-1" />
-      Salvato
-    </span>
-  ) : activeFile && activeFile.isDirty ? (
-    <span className="flex items-center text-red-400">
-      <Save size={16} className="mr-1" />
-      Non Salvato
-    </span >
-  ) : null;
+export function StatusBar({ isSaving, runtimeErrors = [], onFixError }) {
+  const errorCount = runtimeErrors.length;
 
   return (
-    <div className="flex justify-between items-center h-8 bg-editor-darker text-editor-border text-xs px-4 border-t border-editor-border">
-      <div className="flex items-center">
-        {fileInfo}
+    <footer className="flex items-center justify-between h-8 px-4 bg-editor-darker border-t border-editor-border text-sm text-gray-400 flex-shrink-0">
+      <div className="flex items-center space-x-4">
+        {/* Pulsante per la correzione degli errori */}
+        {errorCount > 0 && (
+          <button
+            onClick={onFixError}
+            title="Invia l'errore all'AI per la correzione"
+            className="flex items-center px-3 py-1 bg-red-600/80 text-white rounded-md hover:bg-red-500 transition-colors duration-200"
+          >
+            <Bug className="mr-2 h-4 w-4" />
+            <span>
+              {errorCount} Error{errorCount > 1 ? "i" : "e"}: Clicca per
+              correggere
+            </span>
+          </button>
+        )}
       </div>
+
+      {/* Indicatore di salvataggio */}
       <div className="flex items-center">
-        {editorSettings}
-        {saveStatus}
+        {isSaving ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <span>Saving...</span>
+          </>
+        ) : (
+          <>
+            <Save className="mr-2 h-4 w-4" />
+            <span>Saved</span>
+          </>
+        )}
       </div>
-    </div>
+    </footer>
   );
 }
 
 StatusBar.propTypes = {
-  isSaving: PropTypes.bool.isRequired,
+  isSaving: PropTypes.bool,
+  runtimeErrors: PropTypes.arrayOf(PropTypes.string),
+  onFixError: PropTypes.func,
+};
+
+StatusBar.defaultProps = {
+  isSaving: false,
+  runtimeErrors: [],
+  onFixError: () => {},
 };

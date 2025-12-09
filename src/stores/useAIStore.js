@@ -22,8 +22,6 @@ const validateResponse = ajv.compile(getResponseSchema());
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
-const MAX_AUTO_FIX_ATTEMPTS = 3;
-
 const initialMessages = [
   {
     id: "system-prompt",
@@ -109,13 +107,23 @@ export const useAIStore = create((set, get) => ({
   isStreaming: false,
   error: null,
   multiFileTaskState: null,
-  autoFixAttempts: 0,
+  initialPrompt: null, // Nuovo stato per il prompt iniziale
   abortController: null, // Per gestire l'annullamento delle chiamate fetch
 
   getMessages: () => {
     const { conversations, currentChatId } = get();
     const currentChat = conversations.find((c) => c.id === currentChatId);
     return currentChat ? currentChat.messages : initialMessages;
+  },
+
+  // Nuova azione per impostare e consumare il prompt iniziale
+  setInitialPrompt: (prompt) => set({ initialPrompt: prompt }),
+  consumeInitialPrompt: () => {
+    const prompt = get().initialPrompt;
+    if (prompt) {
+      set({ initialPrompt: null }); // Resetta dopo la lettura
+    }
+    return prompt;
   },
 
   loadConversations: async () => {
@@ -296,70 +304,6 @@ export const useAIStore = create((set, get) => ({
     await get().saveConversation();
   },
 
-  // --- Auto-Debugging Cycle ---
-
-  /**
-   * Attende e controlla se l'ultima azione ha causato un errore di runtime.
-   * Se sì, avvia un ciclo di correzione. Altrimenti, procede.
-   * @returns {boolean} True se il ciclo principale deve continuare, false altrimenti.
-   * @private
-   */
-  _checkForRuntimeErrors: async () => {
-    const { addMessage, sendMessage, multiFileTaskState } = get();
-
-    // Attendi che l'iframe si ricarichi e che eventuali errori vengano catturati
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-
-    const lastError = window.projectContext?.lastIframeError;
-    window.projectContext.lastIframeError = null; // Consuma l'errore
-
-    if (lastError) {
-      const currentAttempts = get().autoFixAttempts;
-      if (currentAttempts >= MAX_AUTO_FIX_ATTEMPTS) {
-        const errorMessage = `❌ Auto-fix failed after ${MAX_AUTO_FIX_ATTEMPTS} attempts. Last error: ${lastError}`;
-        addMessage({
-          id: Date.now().toString(),
-          role: "assistant",
-          content: errorMessage,
-        });
-        set({ autoFixAttempts: 0, multiFileTaskState: null }); // Interrompi tutto
-        return false;
-      }
-
-      set({ autoFixAttempts: currentAttempts + 1 });
-      const systemErrorMessage = `[SYSTEM-ERROR] The last action caused a runtime error: "${lastError}". Please analyze the code and fix it.`;
-      addMessage({
-        id: Date.now().toString(),
-        role: "user", // Lo presentiamo come un input di sistema per l'AI
-        content: systemErrorMessage,
-      });
-
-      // Pulisci la console per evitare di rileggere lo stesso errore.
-      if (typeof window.clearProjectConsole === "function") {
-        window.clearProjectConsole();
-      }
-
-      return true; // Continua il loop di sendMessage per la correzione
-    }
-
-    // Successo! Nessun errore.
-    set({ autoFixAttempts: 0 });
-
-    // Se siamo in un task multi-file, controlla se è finito.
-    if (multiFileTaskState && multiFileTaskState.remainingFiles.length === 0) {
-      addMessage({
-        id: Date.now().toString(),
-        role: "status", // Ruolo di stato per non inquinare la cronologia AI
-        content: "Multi-file task completed successfully.",
-      });
-      set({ multiFileTaskState: null });
-      return false; // Task finito, interrompi il loop.
-    }
-
-    // Se siamo in un task multi-file e ci sono altri file, continua.
-    return !!multiFileTaskState;
-  },
-
   // --- Action Handlers (Refactored from sendMessage) ---
 
   /**
@@ -482,8 +426,7 @@ export const useAIStore = create((set, get) => ({
         },
       }));
 
-      return true;
-      // return await get()._checkForRuntimeErrors();
+      return true; // Continua il loop
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -545,8 +488,7 @@ export const useAIStore = create((set, get) => ({
           ),
         },
       }));
-      return true;
-      // return await get()._checkForRuntimeErrors();
+      return true; // Continua il loop
     } catch (e) {
       addMessage({
         id: Date.now().toString(),
@@ -578,10 +520,10 @@ export const useAIStore = create((set, get) => ({
     let shouldContinue = false; // Default: non continuare il loop.
     if (action === "text_response") {
       shouldContinue = await get()._handleTextResponse(text_response);
-      return false; // Dopo una risposta testuale, continua per eventuali altre azioni
+      // Dopo una risposta testuale, il loop si interrompe.
     } else if (action === "tool_call" && tool_call) {
       shouldContinue = await get()._handleToolCall(tool_call);
-      return true; // Dopo una chiamata a tool, continua per eventuali altre azioni
+      // Dopo una chiamata a tool, il loop continua.
     } else if (action === "start_multi_file" && plan && first_file) {
       shouldContinue = await get()._handleStartMultiFile(
         plan,
@@ -600,8 +542,7 @@ export const useAIStore = create((set, get) => ({
       });
       shouldContinue = false; // Non continuare
     }
-    // shouldContinue = await get()._checkForRuntimeErrors();
-    return shouldContinue;
+    return shouldContinue; // Ritorna la decisione dell'handler
   },
 
   /**
