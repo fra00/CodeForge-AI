@@ -457,6 +457,18 @@ export const useAIStore = create((set, get) => ({
       return false; // Interrompe il loop
     }
 
+    // CORREZIONE: Gestisce il caso 'noop' prima di tentare di accedere a next_file.file.path
+    // per evitare errori quando 'file' è un oggetto vuoto.
+    if (next_file.action === "noop" && next_file.is_last_file) {
+      addMessage({
+        id: `${Date.now()}-res`,
+        role: "file-status",
+        content: "Task marked as complete by AI.",
+      });
+      set({ multiFileTaskState: null }); // Pulisce lo stato del task
+      return false; // Interrompe il loop
+    }
+
     addMessage({
       id: `${Date.now()}-msg`,
       role: "assistant", // Ruolo di stato per non inquinare la cronologia AI

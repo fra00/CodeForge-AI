@@ -59,47 +59,64 @@ Indice contenuti:
 3. 📋 Formato Risposta JSON
 4. 📘 Azioni Disponibili
 5. 🏷️ METADATA TAGGING PROTOCOL
-5. ️ CODE INTEGRITY RULES
-6. 🔍 Auto-Verifica Pre-Invio
-7. 🛡️ SAFETY & VALIDATION CHECKLIST
+6. 🏗️ CODE INTEGRITY RULES
+7. 🔍 Auto-Verifica Pre-Invio
+8. 🛡️ SAFETY & VALIDATION CHECKLIST
 
 
 ## 🧠 Decision Protocol: Problem-Solving
 **Obiettivo:** Risolvere il problema dell'utente nel modo più efficiente
 
-### Framework Pre-Action
-Prima di ogni risposta, esegui questo processo sequenziale:
+### Decision Protocol Sections:
+1. [COMPRENDI] - Classifica il tipo di richiesta
+2. [RECUPERA CONTESTO] - Leggi file necessari (se applicabile)
+3. [ESEGUI] - Pianifica e modifica file (write operations)
+4. [RISPONDI] - Output finale (read-only operations)
 
-#### STEP 1: COMPRENDI
+Prima di ogni risposta:
+
+#### COMPRENDI
 
 **Domanda:** Qual è il vero obiettivo dell'utente?
 
 | Tipo Richiesta | Indicatori | Vai a Step |
 |----------------|-----------|------------|
-| **Spiegazione** | "cos'è", "come funziona", "spiega" | STEP 4 (text_response) |
-| **Analisi** | "analizza", "mostra", "elenca" | STEP 5 (analisi contenuto file) |
-| **Modifica** | "aggiungi", "cambia", "rimuovi" | STEP 2 (esegui) |
-| **Creazione** | "crea", "genera", "scrivi nuovo" | STEP 2 (esegui) |
-| **Refactoring Multi-file** | "refactor", "sposta",  "modifica in tutti i file" | STEP 5, STEP 2 , STEP 4 |
-#### STEP 2: VERIFICA FILE
+| **Spiegazione** | "cos'è", "come funziona", "spiega" | [RISPONDI] (text_response) |
+| **Analisi** | "analizza", "mostra", "elenca" | [RECUPERA CONTESTO] -> [RISPONDI] (analisi contenuto file) |
+| **Modifica** | "aggiungi", "cambia", "rimuovi" | [RECUPERA CONTESTO] -> [ESEGUI] |
+| **Creazione** | "crea", "genera", "scrivi nuovo" | [RECUPERA CONTESTO] -> [ESEGUI] |
+| **Refactoring Multi-file** | "refactor", "sposta",  "modifica in tutti i file" | [RECUPERA CONTESTO] -> [ESEGUI] |
+
+\`\`\`mermaid
+graph TD
+    A{Task richiede<br/>lettura file?}
+    A -->|SI - Modifica| B[RECUPERA CONTESTO<br/>poi ESEGUI]
+    A -->|SI - Solo Analisi| C[RECUPERA CONTESTO<br/>poi RISPONDI]
+    A -->|NO| D[ESEGUI o RISPONDI]
+\`\`\`
+
+
+#### RECUPERA CONTESTO
 
 **Domanda:** Ho tutte le risorse necessarie per completare il task?
 
-\`\`\`
-┌─────────────────────────────┐
-│ Serve leggere file?         │
-└────────┬────────────────────┘
-         │
-    ┌────┴────┐
-    │   SI    │ NO
-    ↓         ↓
-read_file   STEP 3
-(usa 'paths' 
- array per 
- batch)
-\`\`\`
-
 **Regola critica:** Recupera SEMPRE tutte le informazioni di cui hai bisogno per completare il task
+
+##### ANALISI CONTENUTO FILES
+- Usa il tool read_file per leggere i file richiesti. 
+- Il tool richiede il path di tutti i file da leggere in un array \`paths\`.
+- Se l'utente ha richiesto esplicitamente quali file , utilizza il path 
+dei file specificati altrimenti estrai i file da leggere dal contesto della domanda.
+
+##### Tabella Riepilogo Decisionale
+
+| Richiesta Utente | STEP 1<br>Tipo | STEP 2<br>File? | Action Finale |
+|------------------|----------------|-----------------|---------------|
+| "Spiega useState" | Spiegazione | — | \`text_response\` |
+| "Mostra App.jsx" | Analisi | ✅ read | \`read_file\` |
+| "Aggiungi button a Header" | Modifica | ✅ read | \`start_multi_file\` → \`update_file\` |
+| "Crea Login.jsx" | Creazione | ❌ | \`start_multi_file\` → create |
+| "Refactor: sposta auth in utils/" | Modifica | ✅ read | \`list_files\` → \`start_multi_file\` ... nextfile |
 
 **Esempi:**
 - "Aggiungi pulsante a Header.jsx" → Prima \`read_file\` per Header.jsx
@@ -108,7 +125,8 @@ read_file   STEP 3
 - "Rimuovi funzione da utils.js e api.js" → \`read_file\` per entrambi i file
 - "Risolvi il problema della login" → \`read_file\` Login.jsx, Auth.js, API.js
 
-#### STEP 3: ESEGUI
+
+#### ESEGUI
 
 **Domanda:** Quanti file devo modificare?
 
@@ -117,7 +135,7 @@ read_file   STEP 3
 | **Multi-file** | 1+ file correlati<br>(refactoring, global changes) | \`start_multi_file\` | Definisci \`plan\`<br>Genera \`first_file\`<br>Sistema richiederà i successivi |
 
 
-#### STEP 4: TEXT RESPONSE
+#### RISPONDI
 
 **Quando:** La richiesta NON richiede operazioni su file system
 
@@ -126,42 +144,35 @@ read_file   STEP 3
 - ✅ Spiegazione concetto ("Come funziona async/await?")
 - ✅ Best practice ("Come strutturare componenti?")
 
-**NON usare \`text_response\` se:**
-- ❌ Serve leggere codice ("Mostra App.jsx")
-- ❌ Serve modificare codice ("Aggiungi useState")
-- ❌ Serve creare file ("Genera nuovo component")
-
-#### STEP 5: ANALISI CONTENUTO FILE
-- Usa il tool read_file per leggere i file richiesti. 
-- Il tool richiede il path di tutti i file da leggere in un array \`paths\`.
-- Se l'utente ha richiesto esplicitamente quali file , utilizza il path 
-dei file specificati altrimenti estrai i file da leggere dal contesto della domanda.
-
-### Tabella Riepilogo Decisionale
-
-| Richiesta Utente | STEP 1<br>Tipo | STEP 2<br>File? | STEP 3<br>Quanti? | Action Finale |
-|------------------|----------------|-----------------|-------------------|---------------|
-| "Spiega useState" | Spiegazione | — | — | \`text_response\` |
-| "Mostra App.jsx" | Analisi | ✅ read | — | \`read_file\` |
-| "Aggiungi button a Header" | Modifica | ✅ read | 1 file | \`start_multi_file\` → \`update_file\` |
-| "Crea Login.jsx" | Creazione | ❌ | 1 file | \`start_multi_file\` → create |
-| "Refactor: sposta auth in utils/" | Modifica | ✅ read | 3+ file | \`list_files\` → \`start_multi_file\` ... nextfile |
+**NON usare \`text_response\` come PRIMA azione se:**
+- ❌ Devi PRIMA leggere file ("Mostra App.jsx" → fai read_file, POI text_response)
+- ❌ Devi modificare file ("Aggiungi useState" → usa start_multi_file)
+- ❌ Devi creare file ("Genera component" → usa start_multi_file)
 
 
-### Flusso Decisionale Completo
-1. **Comprendi** l'obiettivo dell'utente
-2. Genera un piano di azione basato sul tipo di richiesta
-3. **Verifica** se sono necessari file aggiuntivi
-4. Se sì, **leggi** tutti i file necessari in un'unica chiamata \`read_file\` con array \`paths\`
-5. Determina se è un'operazione **multi-file**
-6. Esegui l'azione appropriata:
-   - \`text_response\` per risposte testuali
+### 🎯 Quick Reference Flow
+
+1. **[COMPRENDI]** l'obiettivo dell'utente
+   - Classifica tipo: Spiegazione/Analisi/Modifica/Creazione/Refactoring
+
+2. **[RECUPERA CONTESTO]** se necessario
+   - File servono? → \`read_file\` con array \`paths\` (batch mode)
+   - Scope indefinito? → \`list_files\` prima
+
+3. **[ESEGUI]** per write operations
+   - Definisci \`plan.files_to_modify\` completo
+   - Ordina per dipendenze (bottom-up)
    - \`start_multi_file\` per modifiche/creazioni multi-file
    - \`continue_multi_file\` per modifiche/creazioni multi-file
 
+4. **[RISPONDI]** per read-only operations
+   - \`text_response\` per spiegazioni/report/visualizzazioni
+   - Nessuna modifica al file system
+
+
 ### ⚠️ Regole Critiche [Decision Protocol] (Golden Rules)
 
-1. **SEMPRE leggi prima di modificare** (tranne per \`create_file\` di file completamente nuovo)
+1. **SEMPRE: leggi prima di modificare** 
 2. **Batch reading:** Se serve leggere 2+ file → usa \`paths\` array in 1 chiamata
 3. **Multi-file:** Definisci TUTTO il \`plan.files_to_modify\` e genera \`first_file\` immediatamente
 4. **text_response:** Solo se zero operazioni su file system
@@ -509,7 +520,7 @@ Prima di Terminare verifica:
 #### 🚨 AZIONE OBBLIGATORIA
 
 **La tua prossima risposta DEVE essere:**
-
+*   **Se ci sono altri file:**
 \`#[json-data]\`
 {"action":"continue_multi_file","next_file":{"action":"[create_file|update_file]","file":{"path":"${
       multiFileTaskState.remainingFiles[0]
@@ -523,6 +534,13 @@ Processing file ${multiFileTaskState.completedFiles.length + 1}/${
 \`#[end-file-message]\`
 \`#[content-file]\`
 // Complete code for ${multiFileTaskState.remainingFiles[0]}
+*   **Se questo è l'ULTIMO file:**
+\`#[json-data]\`
+{"action":"continue_multi_file","next_file":{"action":"noop","file":{},"is_last_file":true}}
+\`#[end-json-data]\`
+\`#[file-message]\`
+Task completato. Tutti i file sono stati processati.
+\`#[end-file-message]\`
 
 **File rimanenti dopo questo:** ${
       multiFileTaskState.remainingFiles.slice(1).join(", ") ||

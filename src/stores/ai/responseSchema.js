@@ -25,7 +25,7 @@ export const getResponseSchema = () => ({
     fileAction: {
       type: "object",
       properties: {
-        action: { enum: ["create_file", "update_file", "delete_file"] },
+        action: { enum: ["create_file", "update_file", "delete_file", "noop"] },
         file: { $ref: "#/properties/file" },
         tags: { $ref: "#/definitions/tagsObject" }, // Riferimento ai tag
       },
