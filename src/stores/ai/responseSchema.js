@@ -53,7 +53,7 @@ export const getResponseSchema = () => ({
       required: ["path"],
     },
     text_response: { type: "string" },
-    message: { type: "string" },
+    // message: { type: "string" },
     tool_call: {
       type: "object",
       properties: {
@@ -74,7 +74,7 @@ export const getResponseSchema = () => ({
     plan: {
       type: "object",
       properties: {
-        description: { type: "string" },
+        // description: { type: "string" },
         files_to_modify: {
           type: "array",
           items: { type: "string" },

@@ -1,3 +1,41 @@
+/* Definizione delle variabili di tema */
+:root {
+  /* Tema Scuro (Default) */
+  --editor-bg: #1e1e1e;
+  --editor-darker: #1a1a1a;
+  --editor-foreground: #d4d4d4;
+  --editor-border: #4a5568;
+  --editor-highlight: #2a2d2e;
+
+  --card-bg: #252526;
+  --card-border-color: #3c3c3c;
+  --card-color: #cccccc;
+
+  --text-color: #cccccc;
+  --primary-color: #0e639c;
+  --button-bg: #0e639c;
+  --button-text: white;
+}
+
+[data-theme="light"] {
+  /* Tema Chiaro */
+  --editor-bg: #f9f9f9;
+  --editor-darker: #ffffff;
+  --editor-foreground: #111827;
+  --editor-border: #d1d5db;
+  --editor-highlight: #f3f4f6;
+
+  --card-bg: #ffffff;
+  --card-border-color: #e5e7eb;
+  --card-color: #111827;
+
+  --text-color: #111827;
+  --primary-color: #2563eb;
+  --button-bg: #2563eb;
+  --button-text: white;
+}
+
+
 #root {
   max-width: 1280px;
   margin: 0 auto;

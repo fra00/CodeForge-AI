@@ -109,6 +109,24 @@ export const useAIStore = create((set, get) => ({
   multiFileTaskState: null,
   initialPrompt: null, // Nuovo stato per il prompt iniziale
   abortController: null, // Per gestire l'annullamento delle chiamate fetch
+  contextFiles: [], // Nuovo: Array per i percorsi dei file di contesto
+
+  // --- AZIONI PER I FILE DI CONTESTO ---
+  addContextFile: (path) =>
+    set((state) => {
+      if (!state.contextFiles.includes(path)) {
+        return { contextFiles: [...state.contextFiles, path] };
+      }
+      return state;
+    }),
+
+  removeContextFile: (path) =>
+    set((state) => ({
+      contextFiles: state.contextFiles.filter((p) => p !== path),
+    })),
+
+  clearContextFiles: () => set({ contextFiles: [] }),
+  // --- FINE AZIONI CONTESTO ---
 
   getMessages: () => {
     const { conversations, currentChatId } = get();
@@ -197,6 +215,7 @@ export const useAIStore = create((set, get) => ({
 
   newChat: () => {
     const newChat = createNewChat();
+    get().clearContextFiles(); // Pulisce i file di contesto quando si crea una nuova chat
     set((state) => ({
       conversations: [...state.conversations, newChat],
       currentChatId: newChat.id,
@@ -266,6 +285,7 @@ export const useAIStore = create((set, get) => ({
 
   clearConversation: () => {
     const { currentChatId } = get();
+    get().clearContextFiles(); // Pulisce anche i file di contesto
     set((state) => ({
       conversations: state.conversations.map((chat) => {
         if (chat.id === currentChatId) {
@@ -568,7 +588,7 @@ export const useAIStore = create((set, get) => ({
     modelName,
     maxToolCalls = 20
   ) => {
-    const { addMessage, currentChatId } = get();
+    const { addMessage, currentChatId, contextFiles } = get();
     const fileStore = useFileStore.getState();
 
     if (!provider || !apiKey || !modelName) {
@@ -580,7 +600,6 @@ export const useAIStore = create((set, get) => ({
 
     if (!context || !context.currentFile || context.currentFile === "none") {
       // Fallback: prova a prendere il file attivo dallo store se disponibile
-      // Nota: Adatta 'activeFilePath' al nome esatto della proprietà nel tuo fileStore se diverso
       const activePath = fileStore.activeFilePath;
       const activeFile = activePath
         ? fileStore.files.find((f) => f.path === activePath)
@@ -626,7 +645,7 @@ export const useAIStore = create((set, get) => ({
       set({
         isStreaming: true,
         error: null,
-        abortController: controller, // <-- SALVA IL CONTROLLER NELLO STATO
+        abortController: controller,
       });
       const responseSchema = getResponseSchema();
 
@@ -642,18 +661,15 @@ export const useAIStore = create((set, get) => ({
           });
           break;
         }
-        // 🛑 LOGICA SEMPLIFICATA
+
         if (startFilePath && startFilePath !== "none") {
-          // FIX: Usa Object.values() per iterare correttamente l'oggetto files
           const freshFile = Object.values(useFileStore.getState().files).find(
             (f) => f && normalizePath(f.path) === normalizePath(startFilePath)
           );
 
           if (freshFile) {
-            // CASO 1: Il file esiste ancora (è stato solo modificato) -> Aggiorna contenuto
             context.content = freshFile.content;
           } else {
-            // CASO 2: Il file è sparito (rinominato o cancellato)
             context.content =
               "(File no longer exists at this path - possibly renamed or deleted)";
           }
@@ -667,28 +683,37 @@ export const useAIStore = create((set, get) => ({
           : initialMessages;
         const currentMultiFileState = get().multiFileTaskState;
 
+        // --- NUOVA LOGICA: COSTRUISCI CONTESTO AGGIUNTIVO ---
+        const allFiles = Object.values(useFileStore.getState().files); // CORREZIONE: Converti oggetto in array
+        const userProvidedContext = contextFiles
+          .map((path) => {
+            const file = allFiles.find((f) => f && f.path === path);
+            if (file) {
+              return `--- ${path} ---\n${file.content}`;
+            }
+            return `--- ${path} ---\n(File not found)`;
+          })
+          .join("\n\n");
+        // --- FINE NUOVA LOGICA ---
+
         const systemPromptWithContext = buildSystemPrompt(
           context,
           currentMultiFileState,
           useAIStore,
-          fileStore
+          fileStore,
+          userProvidedContext // Passa il nuovo contesto
         );
 
-        // Filtra i messaggi non utili per l'AI e prendi solo gli ultimi 20
         const recentHistory = conversationHistory
-          // 🛡️ FILTRO API: Rimuove messaggi di sistema e di stato
           .filter((m) => m.role !== "system" && m.role !== "status")
           .filter((m) => m.content && m.content.toString().trim().length > 0)
-          //.slice(-20); // Prendi solo gli ultimi 20 messaggi
-          .slice(-10); // Prendi solo gli ultimi 20 messaggi
+          .slice(-10);
 
-        // Prepara il payload finale per l'API
         const messagesForLLM = [
           { role: "system", content: systemPromptWithContext },
           ...recentHistory,
         ];
 
-        // Chiamata LLM
         const response = await getChatCompletion({
           provider,
           apiKey,
@@ -696,11 +721,10 @@ export const useAIStore = create((set, get) => ({
           messages: messagesForLLM,
           stream: false,
           responseSchema,
-          signal: controller.signal, // Passa il signal per l'annullamento
+          signal: controller.signal,
           maxTokens: 8192,
         });
 
-        // Check Troncamento
         if (response.truncated) {
           addMessage({
             id: Date.now().toString(),
@@ -712,7 +736,6 @@ export const useAIStore = create((set, get) => ({
           return;
         }
 
-        // Parsing Risposta
         let rawText;
         if (typeof response === "string") {
           rawText = response;
@@ -726,7 +749,6 @@ export const useAIStore = create((set, get) => ({
           rawText = JSON.stringify(response);
         }
 
-        // --- NUOVO PARSING MULTI-PARTE ---
         const jsonObject = parseMultiPartResponse(rawText);
 
         if (!jsonObject) {
@@ -743,8 +765,6 @@ export const useAIStore = create((set, get) => ({
 
         console.log("Parsed AI Response JSON:", jsonObject);
 
-        // --- 🛡️ VALIDAZIONE DELLO SCHEMA ---
-        // Questo è il "controllo qualità" che rende lo schema un contratto blindato.
         const isValid = validateResponse(jsonObject);
         if (!isValid) {
           const validationErrors = JSON.stringify(
@@ -758,23 +778,19 @@ export const useAIStore = create((set, get) => ({
           );
           addMessage({
             id: Date.now().toString(),
-            role: "user", // Lo presentiamo come un errore di sistema che l'AI deve vedere
+            role: "user",
             content: `[SYSTEM-ERROR] Your response does not conform to the required JSON schema. Please correct it. Errors:\n${validationErrors}`,
           });
-          // Continuiamo il loop per permettere all'AI di correggersi.
           continue;
         }
 
-        // --- DISPATCHER ---
-        // Delega la gestione della risposta agli handler specifici.
-        // Il risultato booleano determina se il loop deve continuare.
         toolCallCount++;
         const shouldContinue = await get()._handleParsedResponse(jsonObject);
 
         if (shouldContinue) {
-          continue; // Prossima iterazione del while loop
+          continue;
         } else {
-          break; // Esci dal while loop
+          break;
         }
       }
 
@@ -786,7 +802,6 @@ export const useAIStore = create((set, get) => ({
         });
       }
     } catch (e) {
-      // Gestisce tutti gli altri errori
       console.error("Error in AI conversation:", e);
       set({ error: e.message });
       addMessage({
@@ -799,11 +814,9 @@ export const useAIStore = create((set, get) => ({
         const newConversations = state.conversations.map((chat) => {
           if (chat.id === state.currentChatId) {
             const updatedMessages = chat.messages.map((msg) => {
-              // Trasforma 'file-status' e 'content' in 'status'
               if (msg.role === "file-status" || msg.role === "content") {
                 return { ...msg, role: "status" };
               }
-              // Trasforma anche i risultati dei tool in messaggi di stato
               if (
                 msg.role === "user" &&
                 msg.content.startsWith("[Tool Result]")
@@ -845,10 +858,8 @@ export const useAIStore = create((set, get) => ({
       return errorMsg;
     }
 
-    // Genera la struttura del progetto da includere nel prompt
     const projectStructure = getProjectStructurePrompt(fileStore);
 
-    // Prompt specifico per la generazione della specifica 2WHAV
     const specificationSystemPrompt = `You are a prompt engineering expert specializing in the 2WHAV framework. The current project environment is "${environment}".
 Your task is to take a user's request and expand it into a detailed, structured prompt using the 2WHAV framework provided below.
 Analyze the user's request and the provided project structure, identify the implicit requirements, and populate all relevant phases of the framework with specific file paths and details.
@@ -874,10 +885,9 @@ The final output should be ONLY the generated markdown prompt, ready to be used.
         modelName,
         messages,
         stream: false,
-        maxTokens: 4096, // Un limite ragionevole per una specifica
+        maxTokens: 4096,
       });
 
-      // Estrai il testo dalla risposta, indipendentemente dalla struttura esatta
       const extendedPrompt =
         response?.text ||
         response?.content ||

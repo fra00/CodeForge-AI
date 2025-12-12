@@ -23,6 +23,11 @@ import { SettingsPanel } from "./components/Settings/SettingsPanel";
 // La ErrorDialog non è più necessaria, il sistema ora è automatico.
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
 
+// Importa i CSS dei componenti UI riutilizzabili
+import "./components/ui/Dialog.css";
+import "./components/ui/Card.css";
+import "./components/ui/Button.css";
+
 /**
  * Componente principale dell'applicazione.
  * Gestisce l'inizializzazione del file system e il layout principale.

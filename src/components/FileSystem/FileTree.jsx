@@ -28,6 +28,7 @@ export function FileTreeNode({
   handleContextMenu,
   nodeToRename,
   setNodeToRename,
+  onFileClick, // Nuovo: callback per il click su un file
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -62,11 +63,16 @@ export function FileTreeNode({
     if (isFolder) {
       setIsExpanded(!isExpanded);
     } else {
-      // Se il file è già aperto, lo rendiamo attivo. Altrimenti, lo apriamo.
-      if (activeFileId === node.id) {
-        setActiveFile(node.id);
+      // Se abbiamo un handler custom, lo usiamo. Altrimenti, comportamento di default.
+      if (onFileClick) {
+        onFileClick(node.path);
       } else {
-        openFile(node.id);
+        // Se il file è già aperto, lo rendiamo attivo. Altrimenti, lo apriamo.
+        if (activeFileId === node.id) {
+          setActiveFile(node.id);
+        } else {
+          openFile(node.id);
+        }
       }
     }
   };
@@ -96,7 +102,7 @@ export function FileTreeNode({
     <div className="select-none">
       <div
         className={`flex items-center py-1 px-2 text-sm cursor-pointer whitespace-nowrap rounded transition-colors duration-100 ${
-          isActive
+          isActive && !onFileClick // Evidenzia solo se non in modalità selezione
             ? "bg-blue-600 text-white"
             : "hover:bg-editor-highlight text-white"
         }`}
@@ -144,6 +150,7 @@ export function FileTreeNode({
               handleContextMenu={handleContextMenu}
               nodeToRename={nodeToRename}
               setNodeToRename={setNodeToRename}
+              onFileClick={onFileClick} // Propaga
             />
           ))}
         </div>
@@ -158,10 +165,12 @@ FileTreeNode.propTypes = {
     name: PropTypes.string.isRequired,
     isFolder: PropTypes.bool.isRequired,
     isDirty: PropTypes.bool.isRequired,
+    path: PropTypes.string.isRequired,
     children: PropTypes.array,
   }).isRequired,
   level: PropTypes.number,
   handleContextMenu: PropTypes.func.isRequired,
+  onFileClick: PropTypes.func, // Nuovo
 };
 
 /**
@@ -172,6 +181,7 @@ export function FileTree({
   handleContextMenu,
   nodeToRename,
   setNodeToRename,
+  onFileClick, // Nuovo
 }) {
   if (!tree || !tree.children || tree.children.length === 0) {
     return (
@@ -191,6 +201,7 @@ export function FileTree({
           handleContextMenu={handleContextMenu}
           nodeToRename={nodeToRename}
           setNodeToRename={setNodeToRename}
+          onFileClick={onFileClick} // Propaga
         />
       ))}
     </div>
@@ -205,4 +216,5 @@ FileTree.propTypes = {
   handleContextMenu: PropTypes.func.isRequired,
   nodeToRename: PropTypes.string,
   setNodeToRename: PropTypes.func.isRequired,
+  onFileClick: PropTypes.func, // Nuovo
 };

@@ -40,7 +40,8 @@ export const buildSystemPrompt = (
   context,
   multiFileTaskState,
   aiStore,
-  fileStore
+  fileStore,
+  userProvidedContext = ""
 ) => {
   const currentChat = aiStore
     .getState()
@@ -51,7 +52,12 @@ export const buildSystemPrompt = (
 
   const projectStructure = getProjectStructurePrompt(fileStore);
 
-  let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${environmentRules}\n---
+  const userContextSection =
+    userProvidedContext && userProvidedContext.trim() !== ""
+      ? `--- USER-PROVIDED CONTEXT FILES ---\n${userProvidedContext}\n---`
+      : "";
+
+  let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${userContextSection}\n${environmentRules}\n---
 ---
 Indice contenuti:
 1. 🧠 Decision Protocol: Problem-Solving
@@ -432,7 +438,7 @@ export default function Header() { return <div>Logo</div>; }
 Refactor API layer ... Descrizione dettagliata del piano di lavoro
 \`#[end-plan-description]\`
 \`#[json-data]\`
-{"action":"start_multi_file","plan":{"description":"Refactor API layer","files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}}}
+{"action":"start_multi_file","plan":{"files_to_modify":["src/api.js","src/App.jsx"]},"first_file":{"action":"update_file","file":{"path":"src/api.js"},"tags":{"primary":["api-client"],"technical":["axios"],"domain":["networking"]}}}
 \`#[end-json-data]\`
 \`#[file-message]\`
 Aggiornamento di api.js per implementare la nuova struttura del client API.
@@ -536,7 +542,7 @@ Processing file ${multiFileTaskState.completedFiles.length + 1}/${
 // Complete code for ${multiFileTaskState.remainingFiles[0]}
 *   **Se questo è l'ULTIMO file:**
 \`#[json-data]\`
-{"action":"continue_multi_file","next_file":{"action":"noop","file":{},"is_last_file":true}}
+{"action":"continue_multi_file","next_file":{"action":"noop","file":{"path":""},"is_last_file":true}}
 \`#[end-json-data]\`
 \`#[file-message]\`
 Task completato. Tutti i file sono stati processati.
@@ -640,8 +646,8 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 
 #### Errore 5: Path Mancante
 \`\`\`json
-❌ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{}},"message":"..."}
-✅ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}},"message":"..."}
+❌ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{}}}
+✅ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
 
 #### Errore 6: Separatore Mancante
