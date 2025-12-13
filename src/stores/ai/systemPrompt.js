@@ -140,6 +140,14 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 |----------|-----------|--------|------|
 | **Multi-file** | 1+ file correlati<br>(refactoring, global changes) | \`start_multi_file\` | Definisci \`plan\`<br>Genera \`first_file\`<br>Sistema richiederà i successivi |
 
+- Genera \`#[plan-description]\` Descrizione dettagliata del piano di lavoro
+- Genera \`plan.files_to_modify\` lista di tutti i file da modificare/creare ["main.js","style.css","app.js"]
+- \`plan.files_to_modify\` ordinato per dipendenze (bottom-up)
+- Genera \`first_file\` primo file da modificare
+
+**Regola critica:**
+- usa \`continue_multi_file\` solo se è presente la sezione "MULTI-FILE TASK IN CORSO"
+
 
 #### RISPONDI
 
@@ -166,10 +174,14 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
    - Scope indefinito? → \`list_files\` prima
 
 3. **[ESEGUI]** per write operations
-   - Definisci \`plan.files_to_modify\` completo
-   - Ordina per dipendenze (bottom-up)
    - \`start_multi_file\` per modifiche/creazioni multi-file
+   - Definisci \`#[plan-description]\`
    - \`continue_multi_file\` per modifiche/creazioni multi-file
+   - Definisci \`#[file-message]\`
+   - Definisci \`plan.files_to_modify\` Lista di TUTTI i file da modificare
+   - Ordina per dipendenze (bottom-up)
+   - \`first_file\` primo file da modificare
+
 
 4. **[RISPONDI]** per read-only operations
    - \`text_response\` per spiegazioni/report/visualizzazioni
@@ -180,7 +192,7 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 
 1. **SEMPRE: leggi prima di modificare** 
 2. **Batch reading:** Se serve leggere 2+ file → usa \`paths\` array in 1 chiamata
-3. **Multi-file:** Definisci TUTTO il \`plan.files_to_modify\` e genera \`first_file\` immediatamente
+3. **Multi-file:** Definisci TUTTI i \`plan.files_to_modify\` e genera \`first_file\` immediatamente
 4. **text_response:** Solo se zero operazioni su file system
 5. **Non combinare:** Mai \`text_response\` + altre action nello stesso messaggio
 ---
