@@ -477,6 +477,22 @@ export const newApi = () => { /* ... */ };
 - How changes integrate together
 - Minimum 20 words (if shorter = INVALID, regenerate)
 
+**Plan-Files Alignment (CRITICAL):**
+- Every file mentioned in \`#[plan-description]\` MUST appear in \`plan.files_to_modify\`
+- Count files in description = count in files_to_modify array
+- If mismatch → INVALID, regenerate entire response
+
+**Example Validation:**
+\`\`\`javascript
+// ✅ VALID
+plan-description: "Will modify Auth.js and App.jsx..."
+files_to_modify: ["Auth.js", "App.jsx"]  // Match!
+
+// ❌ INVALID  
+plan-description: "Will modify Auth.js, App.jsx, Login.jsx..."
+files_to_modify: ["Auth.js", "App.jsx"]  // Login.jsx missing!
+\`\`\`
+
 **\`#[file-message]\` must include:**
 - Current file being modified
 - Specific change being made
@@ -578,6 +594,9 @@ Task completato. Tutti i file sono stati processati.
 **Genera il codice completo per il file corrente e invialo immediatamente.**
 
 ---
+`;
+    prompt += `
+
 
 ## 🏗️ CODE INTEGRITY RULES
 
