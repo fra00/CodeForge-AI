@@ -1,3 +1,4 @@
+import { useSettingsStore } from "../useSettingsStore";
 import { ENVIRONMENTS } from "../environment";
 
 export const SYSTEM_PROMPT = `You are Code Assistant, a highly skilled software engineer AI assistant. 
@@ -43,6 +44,14 @@ export const buildSystemPrompt = (
   fileStore,
   userProvidedContext = ""
 ) => {
+  // Recupera il custom prompt dallo store
+  const { customSystemPrompt } = useSettingsStore.getState();
+  
+  const customPromptSection =
+    customSystemPrompt && customSystemPrompt.trim() !== ""
+      ? `\n--- CUSTOM USER PROMPT ---\n${customSystemPrompt}\n---`
+      : "";
+
   const currentChat = aiStore
     .getState()
     .conversations.find((c) => c.id === aiStore.getState().currentChatId);
@@ -57,7 +66,7 @@ export const buildSystemPrompt = (
       ? `--- USER-PROVIDED CONTEXT FILES ---\n${userProvidedContext}\n---`
       : "";
 
-  let prompt = `${SYSTEM_PROMPT}\n${projectStructure}\n${userContextSection}\n${environmentRules}\n---
+  let prompt = `${SYSTEM_PROMPT}${customPromptSection}\n${projectStructure}\n${userContextSection}\n${environmentRules}\n---
 ---
 Indice contenuti:
 1. 🧠 Decision Protocol: Problem-Solving

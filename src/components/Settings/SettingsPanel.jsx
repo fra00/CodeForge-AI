@@ -1,5 +1,6 @@
 import React from "react";
 import { APIKeySettings } from "./APIKeySettings";
+import { CustomPromptSettings } from "./CustomPromptSettings"; // Importa il nuovo componente
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
@@ -43,6 +44,7 @@ export function SettingsPanel() {
           AI Assistant
         </h2>
         <APIKeySettings />
+        <CustomPromptSettings />
         <Select
           id="ai-model-select"
           label="Modello AI"

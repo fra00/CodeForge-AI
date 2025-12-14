@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   fileExplorerVisible: true,
   chatHistoryVisible: true,
   editorPreviewSplitSize: 50, // Dimensione di default 50%
+  customSystemPrompt: "", // Aggiunto per il prompt di sistema custom
 };
 
 /**
@@ -83,6 +84,7 @@ export const useSettingsStore = create(
         setLlmModel: (llmModel) => set({ llmModel }),
         setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
         setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
+        setCustomSystemPrompt: (customSystemPrompt) => set({ customSystemPrompt }),
 
         // Azioni per l'UI
         setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),
