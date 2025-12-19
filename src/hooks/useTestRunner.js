@@ -31,19 +31,36 @@ export const useTestRunner = create((set, get) => ({
       statusMessages: [], // Pulisce i messaggi precedenti
     });
     try {
-      // Per ora, gestiamo solo l'esecuzione di un singolo file
-      if (!filePath) {
-        throw new Error("L'esecuzione di tutti i test non è ancora implementata.");
-      }
-
-      const testFile = Object.values(files).find(f => f.path === filePath);
-      if (!testFile) {
-        throw new Error(`File di test non trovato: ${filePath}`);
-      }
-
-      // 1. Trasforma il codice per risolvere gli import
+      let bundledCode;
       const transformer = new TestTransformer(files);
-      const bundledCode = transformer.transform(filePath);
+
+      if (!filePath) {
+        // Esecuzione di tutti i test
+        const testFiles = Object.values(files).filter(
+          (f) =>
+            !f.isFolder &&
+            /\.(test|spec)\.(js|jsx|ts|tsx)$/.test(f.name)
+        );
+
+        if (testFiles.length === 0) {
+          throw new Error("Nessun file di test trovato nel progetto.");
+        }
+
+        // Crea un entry point virtuale che importa tutti i file di test
+        const entryCode = testFiles
+          .map((f) => {
+            const relativePath = f.path.startsWith('/') ? `.${f.path}` : `./${f.path}`;
+            return `import '${relativePath}';`;
+          })
+          .join("\n");
+        
+        // Trasforma questo codice virtuale
+        bundledCode = transformer.transformVirtual(entryCode);
+      } else {
+        // Esecuzione singolo file
+        bundledCode = transformer.transform(filePath);
+      }
+
       
       // Esegue il test in un Web Worker isolato
       const sandbox = new TestSandbox();

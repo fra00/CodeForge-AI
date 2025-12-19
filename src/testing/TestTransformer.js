@@ -28,6 +28,21 @@ export class TestTransformer {
     this.bundleFile(entryFile);
 
     // --- SANIFICAZIONE PER INIEZIONE IN HTML ---
+    return this.generateFinalCode();
+  }
+
+  /**
+   * Trasforma un codice virtuale (non salvato su file) come entry point.
+   * Utile per "Run All Tests" che crea un file che importa tutti gli altri.
+   */
+  transformVirtual(code) {
+    // Creiamo un oggetto file fittizio per il bundleFile
+    const virtualFile = { path: '/__virtual_entry__.js', content: code };
+    this.bundleFile(virtualFile);
+    return this.generateFinalCode();
+  }
+
+  generateFinalCode() {
     // Se il codice contiene la stringa `</script>`, il parser HTML interromperà lo script prematuramente.
     // Sostituiamo la sequenza per evitare questo problema.
     const sanitizeForInjection = (code) => code.replace(/<\/script>/g, '<\\/script>');
@@ -145,7 +160,11 @@ export class TestTransformer {
     // Prova a trovare il file con corrispondenza esatta o aggiungendo estensioni comuni
     const extensions = ['', '.js', '.jsx', '.ts', '.tsx', '/index.js', '/index.jsx', '/index.ts', '/index.tsx'];
     for (const ext of extensions) {
-      const found = Object.values(this.allFiles).find(f => !f.isFolder && f.path === path + ext);
+      const targetPath = path + ext;
+      // Cerca il file gestendo anche l'eventuale assenza/presenza dello slash iniziale
+      const found = Object.values(this.allFiles).find(f => 
+        !f.isFolder && (f.path === targetPath || f.path === targetPath.replace(/^\//, ''))
+      );
       if (found) return found;
     }
     return null;
