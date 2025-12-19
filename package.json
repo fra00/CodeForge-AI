@@ -14,13 +14,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.5",
-    "@babel/traverse": "^7.28.5",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@codesandbox/sandpack-themes": "^2.0.21",
     "@google/genai": "^1.30.0",
     "@hookform/resolvers": "^5.2.2",
     "@monaco-editor/react": "^4.7.0",
+    "acorn": "^8.12.1",
+    "acorn-walk": "^8.3.3",
+    "acorn-jsx": "^5.3.2",
     "ajv": "^8.17.1",
     "file-saver": "^2.0.5",
     "fuse.js": "^7.1.0",
@@ -35,6 +36,7 @@
     "react-hook-form": "^7.66.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^3.0.6",
+    "@testing-library/react": "^16.3.0",
     "react-router-dom": "^6.23.1",
     "react-syntax-highlighter": "^16.1.0",
     "zod": "^4.1.12",
@@ -43,8 +45,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/typography": "^0.5.13",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.0",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

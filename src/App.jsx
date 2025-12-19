@@ -21,6 +21,8 @@ import { ChatHistoryPanel } from "./components/AI/ChatHistoryPanel"; // Importa 
 import { LivePreview } from "./components/Preview/LivePreview";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 // La ErrorDialog non è più necessaria, il sistema ora è automatico.
+import { useTestRunner } from "./hooks/useTestRunner";
+import { TestResultsPanel } from "./components/Testing/TestResultsPanel";
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
 
 // Importa i CSS dei componenti UI riutilizzabili
@@ -50,6 +52,14 @@ function App() {
     extendPromptWith2WHAV, // Recupera la nuova funzione
     setInitialPrompt: setAiInitialPrompt, // Recupera l'azione dallo store
   } = useAIStore();
+  const {
+    runTests,
+    runningTestPath,
+    isRunning: isTesting,
+    results: testResults,
+    error: testError,
+    statusMessages,
+  } = useTestRunner();
   const isInitialized = useFileStore((state) => state.isInitialized);
   const isBlockingOperation = useFileStore(
     (state) => state.isBlockingOperation
@@ -168,6 +178,16 @@ function App() {
   const triggerImport = () =>
     document.getElementById("import-zip-input")?.click();
 
+  // Callback per l'esecuzione dei test
+  const handleRunTest = useCallback(
+    (filePath) => {
+      runTests(filePath);
+    },
+    [runTests]
+  );
+
+  const handleRunAllTests = useCallback(() => runTests(), [runTests]);
+
   const handleFixError = () => {
     if (runtimeErrors.length > 0) {
       const combinedErrors = `Please fix the following ${runtimeErrors.length} error(s):\n\n---\n\n${runtimeErrors.join("\n\n---\n\n")}`;
@@ -246,6 +266,37 @@ function App() {
       mainContent = <AIPanel />;
   }
 
+  // Determina il contenuto del pannello inferiore
+  let bottomPanelContent = null;
+  if (isTesting || testResults || testError) {
+    bottomPanelContent = (
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel defaultSize={50}>
+          <div className="h-full w-full flex flex-col">
+            <div className="p-2 border-b border-editor-border text-xs font-semibold">
+              Test Runner
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 text-xs text-gray-400 font-mono">
+              {statusMessages.map((msg, i) => (
+                <div key={i}>
+                  <span className="text-gray-500 mr-2">{`[${i + 1}]`}</span>{msg}
+                </div>
+              ))}
+            </div>
+          </div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel defaultSize={50}>
+          <TestResultsPanel
+            results={testResults}
+            error={testError}
+            isRunning={isTesting}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
       {/* Overlay per operazioni bloccanti */}
@@ -272,7 +323,14 @@ function App() {
         <Sidebar activePanel={activePanel} onPanelChange={setActivePanel} />
 
         {/* Pannello Laterale Contestuale */}
-        {activePanel === "editor" && <FileExplorer />}
+        {activePanel === "editor" && (
+          <FileExplorer
+            onRunTest={handleRunTest}
+            onRunAllTests={handleRunAllTests}
+            runningTestPath={runningTestPath}
+            isTesting={isTesting}
+          />
+        )}
         {activePanel === "ai" && (
           <ChatHistoryPanel
             conversations={conversations}
@@ -293,7 +351,13 @@ function App() {
         isSaving={isSaving}
         runtimeErrors={runtimeErrors}
         onFixError={handleFixError}
+        showTestTab={!!(testResults || testError || isTesting)}
       />
+
+      {/* Pannello Inferiore Dinamico (es. Risultati Test) */}
+      <div className="h-64 border-t border-editor-border bg-editor-darker">
+        {bottomPanelContent}
+      </div>
     </div>
   );
 }

@@ -10,18 +10,24 @@ import {
   PanelRightOpen,
   FilePlus,
   FolderPlus,
-  RefreshCw,
+  Beaker,
+  Loader2,
 } from "lucide-react";
 
 /**
  * Componente principale per la visualizzazione e gestione del file system virtuale.
  */
-export function FileExplorer() {
+export function FileExplorer({
+  onRunTest,
+  onRunAllTests,
+  runningTestPath,
+  isTesting,
+}) {
   const store = useFileStore();
   const { fileExplorerVisible, toggleFileExplorer } = useSettingsStore();
   const createNewFile = store.createFileOrFolder;
   const rootId = store.rootId;
-  const tree = useMemo(() => store.getTree(), [store.files]);
+  const tree = useMemo(() => store.getTree(), [store.files, store.getTree]);
   const { contextMenu, handleContextMenu, handleCloseContextMenu } =
     useContextMenu();
 
@@ -141,6 +147,16 @@ export function FileExplorer() {
               </button>
             </Tooltip>
           </div>
+          <div className="flex-grow" /> {/* Spacer */}
+          <Tooltip text="Run All Tests">
+            <button
+              onClick={onRunAllTests}
+              className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150 disabled:opacity-50"
+              disabled={isTesting}
+            >
+              {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Beaker size={16} />}
+            </button>
+          </Tooltip>
         </div>
       )}
       {fileExplorerVisible && (
@@ -154,6 +170,8 @@ export function FileExplorer() {
               handleContextMenu={handleContextMenu}
               nodeToRename={nodeToRename}
               setNodeToRename={setNodeToRename}
+              onRunTest={onRunTest}
+              runningTestPath={runningTestPath}
             />
           )}
           {!tree && (

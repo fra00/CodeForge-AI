@@ -4,6 +4,8 @@ import { useFileStore } from "../../stores/useFileStore";
 import { detectIcon } from "../../utils/languageDetector";
 import {
   Folder,
+  Loader2,
+  Play,
   FolderOpen,
   FileCode,
   FileText,
@@ -17,6 +19,8 @@ const IconMap = {
   FileCode,
   FileText,
   FileJson,
+  Play,
+  Loader2,
 };
 
 /**
@@ -29,6 +33,8 @@ export function FileTreeNode({
   nodeToRename,
   setNodeToRename,
   onFileClick, // Nuovo: callback per il click su un file
+  onRunTest, // Nuovo: callback per eseguire un test
+  runningTestPath, // Nuovo: percorso del test in esecuzione
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -51,6 +57,8 @@ export function FileTreeNode({
   const isFolder = node.isFolder;
   const isActive = node.id === activeFileId;
   const isDirty = node.isDirty;
+  const isTestFile = /\.(test|spec)\.(js|jsx|ts|tsx)$/.test(node.name);
+  const isRunningThisTest = runningTestPath === node.path;
 
   const IconComponent = useMemo(() => {
     if (isFolder) {
@@ -121,6 +129,24 @@ export function FileTreeNode({
           className={`mr-2 ${isFolder ? "text-yellow-500" : ""}`}
         />
 
+        {isTestFile && !onFileClick && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onRunTest) onRunTest(node.path);
+            }}
+            disabled={isRunningThisTest}
+            className="mr-2 text-gray-400 hover:text-green-400 disabled:opacity-50"
+            title={`Run test: ${node.name}`}
+          >
+            {isRunningThisTest ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Play size={14} />
+            )}
+          </button>
+        )}
+
         {isRenaming ? (
           <form onSubmit={handleRenameSubmit} onBlur={handleRenameBlur}>
             <input
@@ -151,6 +177,8 @@ export function FileTreeNode({
               nodeToRename={nodeToRename}
               setNodeToRename={setNodeToRename}
               onFileClick={onFileClick} // Propaga
+              onRunTest={onRunTest} // Propaga
+              runningTestPath={runningTestPath} // Propaga
             />
           ))}
         </div>
@@ -171,6 +199,8 @@ FileTreeNode.propTypes = {
   level: PropTypes.number,
   handleContextMenu: PropTypes.func.isRequired,
   onFileClick: PropTypes.func, // Nuovo
+  onRunTest: PropTypes.func,
+  runningTestPath: PropTypes.string,
 };
 
 /**
@@ -182,6 +212,8 @@ export function FileTree({
   nodeToRename,
   setNodeToRename,
   onFileClick, // Nuovo
+  onRunTest,
+  runningTestPath,
 }) {
   if (!tree || !tree.children || tree.children.length === 0) {
     return (
@@ -202,6 +234,8 @@ export function FileTree({
           nodeToRename={nodeToRename}
           setNodeToRename={setNodeToRename}
           onFileClick={onFileClick} // Propaga
+          onRunTest={onRunTest}
+          runningTestPath={runningTestPath}
         />
       ))}
     </div>
@@ -217,4 +251,6 @@ FileTree.propTypes = {
   nodeToRename: PropTypes.string,
   setNodeToRename: PropTypes.func.isRequired,
   onFileClick: PropTypes.func, // Nuovo
+  onRunTest: PropTypes.func,
+  runningTestPath: PropTypes.string,
 };
