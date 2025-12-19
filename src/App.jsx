@@ -6,6 +6,7 @@ import {
   PanelGroup as ResizablePanelGroup,
   PanelResizeHandle as ResizableHandle,
 } from "react-resizable-panels";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { useAIStore } from "./stores/useAIStore";
 import { Header } from "./components/Layout/Header";
@@ -79,6 +80,7 @@ function App() {
 
   const [activePanel, setActivePanel] = useState("editor");
   const [runtimeErrors, setRuntimeErrors] = useState([]);
+  const [isTestPanelCollapsed, setIsTestPanelCollapsed] = useState(false);
 
   // Lo stato showFileExplorer non è più necessario, la visibilità è gestita da useSettingsStore
 
@@ -267,23 +269,7 @@ function App() {
   }
 
   // Determina il contenuto del pannello inferiore
-  let bottomPanelContent = null;
-  if (isTesting || testResults || testError) {
-    bottomPanelContent = (
-      <div className="h-full w-full">
-        <div className="p-2 border-b border-editor-border text-xs font-semibold">
-          Test Results
-        </div>
-        <div className="h-[calc(100%-33px)]">
-          <TestResultsPanel
-            results={testResults}
-            error={testError}
-            isRunning={isTesting}
-          />
-        </div>
-      </div>
-    );
-  }
+  const showTestPanel = isTesting || testResults || testError;
 
   return (
     <div className="flex flex-col h-screen w-screen bg-editor-bg">
@@ -343,9 +329,32 @@ function App() {
       />
 
       {/* Pannello Inferiore Dinamico (es. Risultati Test) */}
-      <div className="h-64 border-t border-editor-border bg-editor-darker">
-        {bottomPanelContent}
-      </div>
+      {showTestPanel && (
+        <div
+          className={`border-t border-editor-border bg-editor-darker transition-all duration-200 ease-in-out flex flex-col ${
+            isTestPanelCollapsed ? "h-9" : "h-64"
+          }`}
+        >
+          <div
+            className="flex items-center justify-between p-2 border-b border-editor-border text-xs font-semibold cursor-pointer hover:bg-editor-highlight select-none"
+            onClick={() => setIsTestPanelCollapsed(!isTestPanelCollapsed)}
+          >
+            <span>Test Results</span>
+            <button className="text-gray-400 hover:text-white focus:outline-none">
+              {isTestPanelCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+          {!isTestPanelCollapsed && (
+            <div className="flex-1 overflow-hidden">
+              <TestResultsPanel
+                results={testResults}
+                error={testError}
+                isRunning={isTesting}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
