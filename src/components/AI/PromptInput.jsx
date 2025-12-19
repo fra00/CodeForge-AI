@@ -25,7 +25,7 @@ import { FileTree } from "../FileSystem/FileTree";
  * Componente per l'input del prompt dell'AI Assistant.
  * Include auto-resize, invio, estensione del prompt e stop.
  */
-export function PromptInput({ onSend, onStop, isGenerating }) {
+export function PromptInput({ onSend, onStop, isGenerating, onExtend }) {
   const [prompt, setPrompt] = useState("");
   const [isExtending, setIsExtending] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,7 +37,6 @@ export function PromptInput({ onSend, onStop, isGenerating }) {
     contextFiles,
     addContextFile,
     removeContextFile,
-    extendPromptWith2WHAV,
   } = useAIStore();
   const { getTree, rootId } = useFileStore();
   const tree = useMemo(() => getTree(), [getTree]);
@@ -53,15 +52,11 @@ export function PromptInput({ onSend, onStop, isGenerating }) {
   }, [prompt, onSend, isGenerating, isExtending]);
 
   const handleExtend = useCallback(async () => {
-    // Questa funzione ora deve essere recuperata dalle props o definita qui
-    // In questo esempio, la prendiamo dallo store, ma potrebbe venire da AIPanel
     const trimmedPrompt = prompt.trim();
-    if (trimmedPrompt && extendPromptWith2WHAV && !isGenerating) {
+    if (trimmedPrompt && onExtend && !isGenerating) {
       setIsExtending(true);
       try {
-        // Le impostazioni AI (provider, apiKey, etc.) dovrebbero essere recuperate
-        // dallo store delle impostazioni, qui usiamo un oggetto vuoto come placeholder
-        const extended = await extendPromptWith2WHAV(trimmedPrompt, {});
+        const extended = await onExtend(trimmedPrompt);
         setPrompt(extended);
       } catch (error) {
         console.error("Failed to extend prompt:", error);
@@ -69,7 +64,7 @@ export function PromptInput({ onSend, onStop, isGenerating }) {
         setIsExtending(false);
       }
     }
-  }, [prompt, extendPromptWith2WHAV, isGenerating]);
+  }, [prompt, onExtend, isGenerating]);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -226,4 +221,5 @@ PromptInput.propTypes = {
   onSend: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   isGenerating: PropTypes.bool.isRequired,
+  onExtend: PropTypes.func,
 };
