@@ -177,6 +177,11 @@ export class VitestCompatibleRunner {
     for (const testOrSubSuite of suite.tests) {
       if (testOrSubSuite.tests) { // È una sotto-suite
         await this.runSuite(testOrSubSuite, { beforeEach: beforeEachHooks, afterEach: afterEachHooks });
+
+        // Flatten: porta su i risultati delle asserzioni dalle sotto-suite
+        suite.assertionResults.push(...testOrSubSuite.assertionResults);
+        if (testOrSubSuite.status === "fail") suite.status = "fail";
+
       } else { // È un test
         this.results.numTotalTests++;
         const startTime = performance.now();

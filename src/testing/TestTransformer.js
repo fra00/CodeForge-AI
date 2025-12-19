@@ -74,6 +74,7 @@ export class TestTransformer {
     }
 
     this.processedFiles.add(file.path);
+    console.log(`[TestTransformer] Processing file: ${file.path}`);
 
     const dependencies = [];
     const codeWithoutImports = [];
@@ -97,20 +98,38 @@ export class TestTransformer {
           const dependencyFile = this.findFile(dependencyPath);
           if (dependencyFile) {
             dependencies.push(dependencyFile);
+          } else {
+            throw new Error(`Module not found: '${source}' imported from '${file.path}'`);
           }
         }
         // Rimuoviamo l'import dal codice
         codeWithoutImports.push(file.content.substring(lastIndex, node.start));
         lastIndex = node.end;
       },
+      // Gestisce `export const ...` o `export { ... }`
+      ExportNamedDeclaration: (node) => {
+        // Aggiunge il codice prima dell'export
+        codeWithoutImports.push(file.content.substring(lastIndex, node.start));
+        
+        if (node.declaration) {
+          // Se è `export const foo = ...`, manteniamo `const foo = ...`
+          // Saltiamo solo la parola "export " (e spazi)
+          lastIndex = node.declaration.start;
+        } else {
+          // Se è `export { foo }`, rimuoviamo tutto perché foo è già definito
+          lastIndex = node.end;
+        }
+      },
+      // Gestisce `export default ...`
+      ExportDefaultDeclaration: (node) => {
+        codeWithoutImports.push(file.content.substring(lastIndex, node.start));
+        codeWithoutImports.push("const defaultExport = ");
+        lastIndex = node.declaration.start;
+      }
     });
 
     codeWithoutImports.push(file.content.substring(lastIndex));
     let transformedCode = codeWithoutImports.join('');
-
-    // Semplice rimozione di 'export default' e 'export'
-    transformedCode = transformedCode.replace(/export default/g, 'const defaultExport =');
-    transformedCode = transformedCode.replace(/export (const|let|var|function|class)/g, '$1');
 
     // Processa prima le dipendenze (post-ordine)
     for (const dep of dependencies) {

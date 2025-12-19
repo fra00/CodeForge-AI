@@ -270,30 +270,18 @@ function App() {
   let bottomPanelContent = null;
   if (isTesting || testResults || testError) {
     bottomPanelContent = (
-      <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel defaultSize={50}>
-          <div className="h-full w-full flex flex-col">
-            <div className="p-2 border-b border-editor-border text-xs font-semibold">
-              Test Runner
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 text-xs text-gray-400 font-mono">
-              {statusMessages.map((msg, i) => (
-                <div key={i}>
-                  <span className="text-gray-500 mr-2">{`[${i + 1}]`}</span>{msg}
-                </div>
-              ))}
-            </div>
-          </div>
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel defaultSize={50}>
+      <div className="h-full w-full">
+        <div className="p-2 border-b border-editor-border text-xs font-semibold">
+          Test Results
+        </div>
+        <div className="h-[calc(100%-33px)]">
           <TestResultsPanel
             results={testResults}
             error={testError}
             isRunning={isTesting}
           />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
+      </div>
     );
   }
 
