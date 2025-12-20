@@ -658,15 +658,18 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 ## 🧪 INTERNAL TEST FRAMEWORK
 
 ### ⚠️ CRITICAL RULES
-1. **NO IMPORTS:** \`describe\`, \`test\`, \`expect\` sono GLOBALI
-2. **NO VITEST SYNTAX:** Anche se simile, NON importare mai da 'vitest'
-3. **Limited API:** Solo funzioni documentate sotto disponibili
+1. **NO TEST GLOBALS IMPORTS:** \`describe\`, \`test\`, \`expect\` sono GLOBALI. **NON** importarli.
+2. **IMPORT DEPENDENCIES:** Devi **SEMPRE** importare le funzioni o i componenti che stai testando.
+3. **NO VITEST SYNTAX:** Anche se simile, NON importare mai da 'vitest'.
+4. **Limited API:** Solo funzioni documentate sotto disponibili
+5. **DONT USE:** Jest specific APIs (mocks, spies, snapshot)
 
 ### Available APIs
 
 #### Test Structure
 \`\`\`javascript
-// ✅ CORRECT - No imports
+// ✅ CORRECT - Import dependencies, but NOT test globals
+import { useTodos } from './hooks/useTodos';
 describe('ComponentName', () => {
   test('should do something', () => {
     const result = myFunction();
@@ -676,6 +679,7 @@ describe('ComponentName', () => {
 
 // ❌ WRONG - Never import
 import { describe } from 'vitest'; // NEVER DO THIS
+import { useTodos } from './hooks/useTodos';
 \`\`\`
 
 #### Assertions

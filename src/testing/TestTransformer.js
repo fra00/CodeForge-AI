@@ -1,5 +1,5 @@
 import { Parser } from "acorn";
-import { simple } from "acorn-walk";
+import { simple, base } from "acorn-walk";
 import jsx from "acorn-jsx";
 // Importiamo il codice del runner come testo grezzo
 import vitestRunnerCode from './VitestCompatibleRunner.js?raw';
@@ -79,6 +79,11 @@ export class TestTransformer {
     `;
   }
 
+  // Helper per generare ID univoci per le variabili basati sul percorso del file
+  getFileId(path) {
+    return path.replace(/[^a-zA-Z0-9]/g, '_');
+  }
+
   /**
    * Funzione ricorsiva che analizza un file, risolve i suoi import e lo aggiunge al bundle.
    * @param {object} file - L'oggetto file da processare.
@@ -90,7 +95,9 @@ export class TestTransformer {
 
     this.processedFiles.add(file.path);
     console.log(`[TestTransformer] Processing file: ${file.path}`);
+    const currentFileId = this.getFileId(file.path);
 
+    let hasExports = false; // Flag per tracciare se il file esporta qualcosa
     const dependencies = [];
     const codeWithoutImports = [];
     let lastIndex = 0;
@@ -102,27 +109,61 @@ export class TestTransformer {
       sourceType: "module",
     });
     
+    // Estendiamo il base visitor per gestire (ignorare) i nodi JSX
+    // acorn-walk non conosce i nodi JSX e fallirebbe se provasse ad attraversarli.
+    // Poiché import ed export sono solo top-level, non serve attraversare il JSX.
+    const jsxBase = { ...base };
+    const jsxTypes = [
+      'JSXElement', 'JSXFragment', 'JSXExpressionContainer', 'JSXText', 
+      'JSXAttribute', 'JSXSpreadAttribute', 'JSXOpeningElement', 'JSXClosingElement', 
+      'JSXOpeningFragment', 'JSXClosingFragment', 'JSXIdentifier', 
+      'JSXMemberExpression', 'JSXNamespacedName', 'JSXEmptyExpression'
+    ];
+    jsxTypes.forEach(type => { jsxBase[type] = () => {}; });
+
     // Usiamo acorn-walk per attraversare l'AST
     simple(ast, {
       // Gestisce `import ... from '...'`
       ImportDeclaration: (node) => {
         const source = node.source.value;
+        let replacements = [];
+
         // Se è un import relativo (inizia con ./ o ../), lo processiamo.
         if (source.startsWith("./") || source.startsWith("../")) {
           const dependencyPath = this.resolvePath(file.path, source);
           const dependencyFile = this.findFile(dependencyPath);
           if (dependencyFile) {
+            const depFileId = this.getFileId(dependencyFile.path);
             dependencies.push(dependencyFile);
+
+            // Generiamo alias per collegare i nomi importati agli export locali
+            if (node.specifiers) {
+              node.specifiers.forEach(spec => {
+                if (spec.type === 'ImportDefaultSpecifier') {
+                  // import App from './App' -> const App = defaultExport_src_App_jsx;
+                  replacements.push(`const ${spec.local.name} = defaultExport_${depFileId};`);
+                } else if (spec.type === 'ImportSpecifier') {
+                  // import { foo as bar } from './utils' -> const bar = foo;
+                  if (spec.imported.name !== spec.local.name) {
+                    replacements.push(`const ${spec.local.name} = ${spec.imported.name};`);
+                  }
+                }
+              });
+            }
           } else {
             throw new Error(`Module not found: '${source}' imported from '${file.path}'`);
           }
         }
-        // Rimuoviamo l'import dal codice
+        // Rimuoviamo l'import dal codice e inseriamo gli alias se presenti
         codeWithoutImports.push(file.content.substring(lastIndex, node.start));
+        if (replacements.length > 0) {
+          codeWithoutImports.push(replacements.join(' '));
+        }
         lastIndex = node.end;
       },
       // Gestisce `export const ...` o `export { ... }`
       ExportNamedDeclaration: (node) => {
+        hasExports = true;
         // Aggiunge il codice prima dell'export
         codeWithoutImports.push(file.content.substring(lastIndex, node.start));
         
@@ -137,14 +178,33 @@ export class TestTransformer {
       },
       // Gestisce `export default ...`
       ExportDefaultDeclaration: (node) => {
-        codeWithoutImports.push(file.content.substring(lastIndex, node.start));
-        codeWithoutImports.push("const defaultExport = ");
-        lastIndex = node.declaration.start;
+        hasExports = true;
+        // Se è `export default function App() {}` o `export default class App {}`
+        // Vogliamo preservare il nome 'App' nello scope.
+        if ((node.declaration.type === 'FunctionDeclaration' || node.declaration.type === 'ClassDeclaration') && node.declaration.id) {
+          // Rimuoviamo 'export default ' ma manteniamo la dichiarazione
+          codeWithoutImports.push(file.content.substring(lastIndex, node.start));
+          // Aggiungiamo la dichiarazione originale
+          codeWithoutImports.push(file.content.substring(node.declaration.start, node.declaration.end));
+          // Aggiungiamo l'assegnazione al defaultExport
+          codeWithoutImports.push(`\nconst defaultExport_${currentFileId} = ${node.declaration.id.name};\n`);
+          lastIndex = node.end;
+        } else {
+          codeWithoutImports.push(file.content.substring(lastIndex, node.start));
+          codeWithoutImports.push(`const defaultExport_${currentFileId} = `);
+          lastIndex = node.declaration.start;
+        }
       }
-    });
+    }, jsxBase);
 
     codeWithoutImports.push(file.content.substring(lastIndex));
     let transformedCode = codeWithoutImports.join('');
+
+    // Se il file non ha export (è probabilmente un test o un side-effect file),
+    // lo avvolgiamo in un blocco per isolare lo scope delle variabili (es. mockLocalStorage).
+    if (!hasExports) {
+      transformedCode = `{\n${transformedCode}\n}`;
+    }
 
     // Processa prima le dipendenze (post-ordine)
     for (const dep of dependencies) {
@@ -157,13 +217,15 @@ export class TestTransformer {
   }
 
   findFile(path) {
+    // Helper per normalizzare i percorsi rimuovendo lo slash iniziale per il confronto
+    const normalize = (p) => p.replace(/^\/+/, '');
+
     // Prova a trovare il file con corrispondenza esatta o aggiungendo estensioni comuni
     const extensions = ['', '.js', '.jsx', '.ts', '.tsx', '/index.js', '/index.jsx', '/index.ts', '/index.tsx'];
     for (const ext of extensions) {
-      const targetPath = path + ext;
-      // Cerca il file gestendo anche l'eventuale assenza/presenza dello slash iniziale
+      const targetPath = normalize(path + ext);
       const found = Object.values(this.allFiles).find(f => 
-        !f.isFolder && (f.path === targetPath || f.path === targetPath.replace(/^\//, ''))
+        !f.isFolder && normalize(f.path) === targetPath
       );
       if (found) return found;
     }

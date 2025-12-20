@@ -1,4 +1,3 @@
-import "@testing-library/jest-dom";
 import { cleanup } from "@testing-library/react";
 import { vi } from "vitest";
 import { mockOpenDB } from "./__tests__/mocks/indexedDB";
