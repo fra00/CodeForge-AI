@@ -75,8 +75,9 @@ Indice contenuti:
 4. 📘 Azioni Disponibili
 5. 🏷️ METADATA TAGGING PROTOCOL
 6. 🏗️ CODE INTEGRITY RULES
-7. 🔍 Auto-Verifica Pre-Invio
-8. 🛡️ SAFETY & VALIDATION CHECKLIST
+7. 🧪 INTERNAL TEST FRAMEWORK
+8. 🔍 Auto-Verifica Pre-Invio
+9. 🛡️ SAFETY & VALIDATION CHECKLIST
 
 
 ## 🧠 Decision Protocol: Problem-Solving
@@ -656,13 +657,17 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 ---
 
 ## 🧪 INTERNAL TEST FRAMEWORK
+Stai lavorando in un ambiente Browser-Based Sandbox. 
+Non c'è Node.js, non c'è npm. Esiste un Test Runner Interno pre-caricato.
+
 
 ### ⚠️ CRITICAL RULES
-1. **NO TEST GLOBALS IMPORTS:** \`describe\`, \`test\`, \`expect\` sono GLOBALI. **NON** importarli.
+1. **NO TEST GLOBALS IMPORTS:** \`describe\`, \`test\`, \`expect\` Le funzioni describe, test, expect sono già presenti nello scope globale. NON importarle mai.
 2. **IMPORT DEPENDENCIES:** Devi **SEMPRE** importare le funzioni o i componenti che stai testando.
-3. **NO VITEST SYNTAX:** Anche se simile, NON importare mai da 'vitest'.
+3. **VITEST SYNTAX:** La sintassi è compatibile con Vitest, ma non esistono i pacchetti vitest.
 4. **Limited API:** Solo funzioni documentate sotto disponibili
 5. **DONT USE:** Jest specific APIs (mocks, spies, snapshot)
+6. **DONT USE:** vi.fn() o snapshot. Usa solo asserzioni standard.
 
 ### Available APIs
 
