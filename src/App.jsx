@@ -6,7 +6,7 @@ import {
   PanelGroup as ResizablePanelGroup,
   PanelResizeHandle as ResizableHandle,
 } from "react-resizable-panels";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, RotateCcw } from "lucide-react";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { useAIStore } from "./stores/useAIStore";
 import { Header } from "./components/Layout/Header";
@@ -339,7 +339,20 @@ function App() {
             className="flex items-center justify-between p-2 border-b border-editor-border text-xs font-semibold cursor-pointer hover:bg-editor-highlight select-none"
             onClick={() => setIsTestPanelCollapsed(!isTestPanelCollapsed)}
           >
-            <span>Test Results</span>
+            <div className="flex items-center gap-2">
+              <span>Test Results</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRunAllTests();
+                }}
+                disabled={isTesting}
+                className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                title="Rerun All Tests"
+              >
+                <RotateCcw size={14} className={isTesting ? "animate-spin" : ""} />
+              </button>
+            </div>
             <button className="text-gray-400 hover:text-white focus:outline-none">
               {isTestPanelCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>

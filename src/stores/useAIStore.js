@@ -13,12 +13,14 @@ import { getResponseSchema } from "./ai/responseSchema";
 import { FRAMEWORK_2WHAV_PROMPT } from "./ai/2whavPrompt";
 import Ajv from "ajv";
 
+import { useTestRunner } from "../hooks/useTestRunner";
 import { ENVIRONMENTS } from "./environment";
 const stoppingObject = { isStopping: false };
 
 // --- Validatore AJV ---
 const ajv = new Ajv();
-const validateResponse = ajv.compile(getResponseSchema());
+const schema = getResponseSchema();
+const validateResponse = ajv.compile(schema);
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
@@ -533,6 +535,57 @@ export const useAIStore = create((set, get) => ({
   },
 
   /**
+   * Gestisce l'esecuzione dei test su richiesta dell'AI.
+   * @returns {Promise<boolean>} True per continuare il loop.
+   * @private
+   */
+  _handleRunTest: async (file) => {
+    const { addMessage } = get();
+    const runner = useTestRunner.getState();
+    
+    addMessage({
+      id: `${Date.now()}-test-status`,
+      role: "test-status",
+      content: `Running tests${file ? ` on ${file}` : '...'}`
+    });
+
+    try {
+      const results = await runner.runTests(file);
+      
+      // Formatta i risultati per l'AI
+      let output = `Test Results:\n`;
+      output += `Status: ${results.numFailedTests === 0 ? 'PASSED' : 'FAILED'}\n`;
+      output += `Passed: ${results.numPassedTests}, Failed: ${results.numFailedTests}, Total: ${results.numTotalTests}\n`;
+      
+      if (results.numFailedTests > 0) {
+        output += `\nFailures:\n`;
+        results.testResults.forEach(suite => {
+          suite.assertionResults.forEach(assertion => {
+            if (assertion.status === 'fail') {
+              output += `- ${assertion.fullName}: ${assertion.failureMessages.join(', ')}\n`;
+            }
+          });
+        });
+      }
+
+      addMessage({
+        id: `${Date.now()}-test-res`,
+        role: "test-status",
+        content: output
+      });
+      
+      return true; // Continua il loop per permettere all'AI di commentare o fixare
+    } catch (e) {
+      addMessage({
+        id: `${Date.now()}-test-err`,
+        role: "test-status",
+        content: `Error running tests: ${e.message}`
+      });
+      return true;
+    }
+  },
+
+  /**
    * Dispatcher principale che smista la risposta parsata dell'AI all'handler corretto.
    * @returns {Promise<boolean>} True se il loop di `sendMessage` deve continuare, altrimenti false.
    * @private
@@ -564,6 +617,9 @@ export const useAIStore = create((set, get) => ({
       );
     } else if (action === "continue_multi_file" && next_file) {
       shouldContinue = await get()._handleContinueMultiFile(next_file, message);
+    } else if (action === "run_test") {
+      const filePath = file?.path || (typeof file === 'string' ? file : undefined);
+      shouldContinue = await get()._handleRunTest(filePath);
     } else {
       // Se nessuna azione corrisponde, aggiungi un messaggio di errore e interrompi
       console.warn("Unhandled action type:", action, jsonObject);

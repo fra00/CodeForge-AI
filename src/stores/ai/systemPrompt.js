@@ -538,6 +538,25 @@ Prima di Terminare verifica:
   ⚠️ Se ci sono errori , correggili prima di terminare il task, puoi iniziare un nuovo multi-file task se necessario.
 2. Se NON è completato , procedi con la chiusura del piano.
 
+### 5. Test Runner
+
+**Quando:** Per verificare le modifiche, fare debugging o regression testing.
+
+#### run_test - Esegui Test
+
+**Struttura:**
+\`#[json-data]\`
+{"action":"run_test", "file":{"path":"src/tests/MyComponent.test.js"}}
+\`#[end-json-data]\`
+
+| Parametro | Tipo | Descrizione |
+|-----------|------|-------------|
+| \`file\` | \`object\` | (Opzionale) Oggetto file con proprietà \`path\`. Se omesso, esegue TUTTI i test. |
+
+**Esempi:**
+- **Tutti i test:** \`{"action":"run_test", "file":{"path":"__all__"}}\`
+- **Test specifico:** \`{"action":"run_test", "file":{"path":"src/utils/api.test.js"}}\`
+
 `;
 
   // Iniezione Stato Multi-File
@@ -633,6 +652,118 @@ Task → Read dependencies → Verify all references exist → Generate → Vali
 \`\`\`
 
 **Golden Rule: If uncertain about ANY reference → \`read_file\` FIRST.**
+
+---
+
+## 🧪 INTERNAL TEST FRAMEWORK
+
+### ⚠️ CRITICAL RULES
+1. **NO IMPORTS:** \`describe\`, \`test\`, \`expect\` sono GLOBALI
+2. **NO VITEST SYNTAX:** Anche se simile, NON importare mai da 'vitest'
+3. **Limited API:** Solo funzioni documentate sotto disponibili
+
+### Available APIs
+
+#### Test Structure
+\`\`\`javascript
+// ✅ CORRECT - No imports
+describe('ComponentName', () => {
+  test('should do something', () => {
+    const result = myFunction();
+    expect(result).toBe(expected);
+  });
+});
+
+// ❌ WRONG - Never import
+import { describe } from 'vitest'; // NEVER DO THIS
+\`\`\`
+
+#### Assertions
+| Method | Usage | Example |
+|--------|-------|---------|
+| \`toBe(value)\` | Strict equality | \`expect(2+2).toBe(4)\` |
+| \`toEqual(obj)\` | Deep equality | \`expect(obj).toEqual({a:1})\` |
+| \`toBeTruthy()\` | Truthy check | \`expect(value).toBeTruthy()\` |
+| \`toBeFalsy()\` | Falsy check | \`expect(value).toBeFalsy()\` |
+| \`toContain(item)\` | Array/String contains | \`expect(arr).toContain(2)\` |
+| \`toThrow(msg)\` | Error thrown (optional message) | \`expect(() => fn()).toThrow("err")\` |
+
+#### Lifecycle
+\`\`\`javascript
+beforeAll(() => { /* Setup once before all tests */ });
+afterAll(() => { /* Cleanup once after all tests */ });
+beforeEach(() => { /* Setup before each test */ });
+afterEach(() => { /* Cleanup after each test */ });
+\`\`\`
+
+### ❌ NOT SUPPORTED
+- ❌ \`vi.mock()\` / \`vi.spyOn()\`
+- ❌ \`test.concurrent()\`
+- ❌ \`expect.extend()\`
+- ❌ Snapshot testing
+
+### Async Testing
+\`\`\`javascript
+// Async/Await is fully supported
+test('should handle async', async () => {
+  const data = await fetchData();
+  expect(data).toBeDefined();
+});
+\`\`\`
+
+### Example Test File
+\`\`\`javascript
+// File: src/utils/math.test.js
+// ✅ NO IMPORTS NEEDED
+
+describe('Math Utilities', () => {
+  test('add should sum two numbers', () => {
+    const result = add(2, 3);
+    expect(result).toBe(5);
+  });
+
+  test('divide should handle zero', () => {
+    expect(() => divide(10, 0)).toThrow();
+  });
+});
+\`\`\`
+
+### 🔍 Self-Check Before Generating Test
+| Check | Question | Fix If Wrong |
+|-------|----------|--------------|
+| 1 | Did I add \`import\` statement? | Remove ALL imports |
+| 2 | Did I use \`vi.mock()\`? | Use plain functions |
+| 3 | Did I use unsupported API? | Check "Available APIs" table |
+| 4 | Is test file in correct location? | Use \`.test.js\` suffix |
+
+### Integration with Multi-File
+**After generating logic file, auto-generate test:**
+\`\`\`javascript
+// Step 1: Create logic file
+{"action":"continue_multi_file","next_file":{"action":"create_file","file":{"path":"src/utils.js"}}}
+
+// Step 2: Auto-create test file
+{"action":"continue_multi_file","next_file":{"action":"create_file","file":{"path":"src/utils.test.js"}}}
+\`\`\`
+
+### Test Execution
+**Run single test:**
+\`\`\`json
+{"action":"run_test", "file":{"path":"src/utils.test.js"}}
+\`\`\`
+
+**Run all tests:**
+\`\`\`json
+{"action":"run_test", "file":{"path":"__all__"}}
+\`\`\`
+
+### Error Handling
+**On test failure:**
+1. Read error message from \`[SYSTEM-ERROR]\`
+2. Identify failed assertion
+3. Use \`update_file\` on source OR test
+4. Re-run \`run_test\` automatically
+5. Max 3 iterations, then ask user
 
 ---
 

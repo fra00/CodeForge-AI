@@ -42,6 +42,7 @@ export const getResponseSchema = () => ({
         "tool_call",
         "start_multi_file",
         "continue_multi_file",
+        "run_test",
       ],
     },
     file: {

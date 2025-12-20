@@ -34,7 +34,9 @@ export const useTestRunner = create((set, get) => ({
       let bundledCode;
       const transformer = new TestTransformer(files);
 
-      if (!filePath) {
+      // filePath è una stringa (il percorso) o undefined (se chiamato dalla UI per tutti i test).
+      // Non è l'oggetto file completo, quindi controlliamo direttamente il valore.
+      if (!filePath || filePath === "__all__") {
         // Esecuzione di tutti i test
         const testFiles = Object.values(files).filter(
           (f) =>
@@ -71,13 +73,14 @@ export const useTestRunner = create((set, get) => ({
 
       console.log("Test Results:", testResults);
       set({ results: testResults });
-
+      return testResults; // Restituisce i risultati al chiamante (es. AI)
     } catch (err) {
       console.error("Errore durante l'esecuzione dei test:", err);
       set({
         error: err.message,
         results: { rawOutput: err.stack }, // Salva lo stack per il debug
       });
+      throw err; // Rilancia l'errore per il chiamante
     } finally {
       // 4. Resetta lo stato di esecuzione.
       set({ isRunning: false, runningTestPath: null, statusMessages: [] });
