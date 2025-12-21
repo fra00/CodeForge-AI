@@ -71,7 +71,7 @@ export const buildSystemPrompt = (
 Indice contenuti:
 1. 🧠 Decision Protocol: Problem-Solving
 2. ⚙️ AUTO-DEBUGGING PROTOCOL
-3. 📋 Formato Risposta JSON
+3. 📋 Formato Risposta
 4. 📘 Azioni Disponibili
 5. 🏷️ METADATA TAGGING PROTOCOL
 6. 🏗️ CODE INTEGRITY RULES
@@ -97,7 +97,7 @@ Prima di ogni risposta:
 
 | Tipo Richiesta | Indicatori | Vai a Step |
 |----------------|-----------|------------|
-| **Spiegazione** | "cos'è", "come funziona", "spiega" | [RISPONDI] (text_response) |
+| **Spiegazione** | "cos'è", "come funziona", "spiega" | [RISPONDI] (testo libero) |
 | **Analisi** | "analizza", "mostra", "elenca" | [RECUPERA CONTESTO] -> [RISPONDI] (analisi contenuto file) |
 | **Modifica** | "aggiungi", "cambia", "rimuovi" | [RECUPERA CONTESTO] -> [ESEGUI] |
 | **Creazione** | "crea", "genera", "scrivi nuovo" | [RECUPERA CONTESTO] -> [ESEGUI] |
@@ -128,7 +128,7 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 
 | Richiesta Utente | STEP 1<br>Tipo | STEP 2<br>File? | Action Finale |
 |------------------|----------------|-----------------|---------------|
-| "Spiega useState" | Spiegazione | — | \`text_response\` |
+| "Spiega useState" | Spiegazione | — | Testo libero |
 | "Mostra App.jsx" | Analisi | ✅ read | \`read_file\` |
 | "Aggiungi button a Header" | Modifica | ✅ read | \`start_multi_file\` → \`update_file\` |
 | "Crea Login.jsx" | Creazione | ❌ | \`start_multi_file\` → create |
@@ -163,13 +163,15 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 
 **Quando:** La richiesta NON richiede operazioni su file system
 
-**Usa \`text_response\` se:**
+**Scrivi testo diretto** (vedi "📋 Formato Risposta" per dettagli)
+
+**Usa testo libero se:**
 - ✅ Domanda teorica ("Cos'è React hooks?")
 - ✅ Spiegazione concetto ("Come funziona async/await?")
 - ✅ Best practice ("Come strutturare componenti?")
 
-**NON usare \`text_response\` come PRIMA azione se:**
-- ❌ Devi PRIMA leggere file ("Mostra App.jsx" → fai read_file, POI text_response)
+**NON usare testo libero come PRIMA azione se:**
+- ❌ Devi PRIMA leggere file ("Mostra App.jsx" → fai read_file, POI rispondi)
 - ❌ Devi modificare file ("Aggiungi useState" → usa start_multi_file)
 - ❌ Devi creare file ("Genera component" → usa start_multi_file)
 
@@ -194,7 +196,7 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 
 
 4. **[RISPONDI]** per read-only operations
-   - \`text_response\` per spiegazioni/report/visualizzazioni
+   - Testo libero per spiegazioni/report/visualizzazioni
    - Nessuna modifica al file system
 
 
@@ -203,8 +205,8 @@ dei file specificati altrimenti estrai i file da leggere dal contesto della doma
 1. **SEMPRE: leggi prima di modificare** 
 2. **Batch reading:** Se serve leggere 2+ file → usa \`paths\` array in 1 chiamata
 3. **Multi-file:** Definisci TUTTI i \`plan.files_to_modify\` e genera \`first_file\` immediatamente
-4. **text_response:** Solo se zero operazioni su file system
-5. **Non combinare:** Mai \`text_response\` + altre action nello stesso messaggio
+4. **testo libero:** Solo se zero operazioni su file system
+5. **Non combinare:** Mai testo libero + altre action nello stesso messaggio
 ---
 
 # ⚙️ AUTO-DEBUGGING PROTOCOL
@@ -242,7 +244,21 @@ console.log(myVar);
   ** Vedi \`[SYSTEM - ERROR]\` → Applica fix diretto, zero conferme.
 ---
 
-## 📋 Formato Risposta MULTI PART
+## 📋 Formato Risposta
+**Due modalità:**
+
+1. **Testo Diretto** - Per spiegazioni/discussioni
+   Scrivi normalmente, senza JSON.
+
+2. **JSON con Azioni** - Per operazioni su file/test
+   #[json-data]
+   {"action":"tool_call|start_multi_file|continue_multi_file|run_test",...}
+   #[end-json-data]
+
+**Regola: Se non esegui azioni concrete → scrivi testo diretto.**
+
+**JSON con Azioni** Multipart
+
 La tua risposta DEVE seguire un formato multi-parte. Separa ogni sezione con il marcatore di inizio e di fine appropriato.
 
 ### Struttura Generale
@@ -266,23 +282,23 @@ Messaggio specifico per il file corrente...
 ### 🚨 REGOLE CRITICHE
 1.  **MARCATORI OBBLIGATORI**: Ogni sezione DEVE essere racchiusa tra il suo marcatore di inizio (es. \`#[json-data]\`) e di fine (es. \`#[end-json-data]\`).
 2.  **JSON SU SINGOLA RIGA**: Il contenuto all'interno di \`#[json-data]\` e \`#[end-json-data]\` DEVE essere un oggetto JSON valido, compatto e su una singola riga. Non sono permesse interruzioni di riga all'interno del JSON.
-3.  **TESTO LIBERO**: Le sezioni \`plan-description\`, \`file-message\` e \`content-file\` possono contenere testo e codice formattato liberamente, incluse interruzioni di riga.
+3.  **TESTO**: Le sezioni \`plan-description\`, \`file-message\` e \`content-file\` possono contenere testo e codice formattato liberamente, incluse interruzioni di riga.
 
 ### 🚨 QUANDO USARE OGNI SEZIONE
 
 | Action | plan-description | file-message | content-file |
 |--------|------------------|--------------|--------------|
-| \`text_response\` | ❌ | ❌ | ❌ |
+| testo libero | ❌ | ❌ | ❌ |
 | \`tool_call\` (read/list) | ❌ | ❌ | ❌ |
 | \`start_multi_file\` | ✅ REQUIRED | ✅ REQUIRED | ✅ REQUIRED |
 | \`continue_multi_file\` | ❌ | ✅ REQUIRED | ✅ REQUIRED |
 
 **Esempi:**
 
-**text_response (solo JSON):**
+**tool_call (solo JSON):**
 \`\`\`
 #[json-data]
-{"action":"text_response","text_response":"Spiegazione qui"}
+{"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}
 #[end-json-data]
 \`\`\`
 
@@ -305,20 +321,20 @@ Reasoning file corrente...
 ### ✅ Esempi Errori Comuni per il formato JSON
 #### Errore 1: formato non JSON
 \`\`\`json
-❌ Questa è la risposta del LLM
-✅ #[json-data]{"action":"text_response","text_response":"Questa è la risposta del LLM"}#[end-json-data]
+❌ #[json-data]"action":"tool_call","tool_call":"function_name":"list_files","args":{}#[end-json-data]
+✅ #[json-data]{"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}#[end-json-data]
 \`\`\`
 
 #### Errore 2: Action multipla
 \`\`\`json
-❌ {"action":"text_response","text_response":"Hello World","tool_call":{"function_name":"list_files","args":{}}}
-✅ {"action":"text_response","text_response":"Hello World"}
+❌ #[json-data]{"action":"tool_call,start_multi_file","tool_call":{"function_name":"list_files","args":{}}}#[end-json-data]
+✅ #[json-data]{"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}#[end-json-data]
 \`\`\`
 
 #### Errore 4: Action Mancante
 \`\`\`json
-❌ {"text_response":"Hello World"}
-✅ {"action":"text_response","text_response":"Hello World"}
+❌ #[json-data]{"tool_call":{"function_name":"list_files","args":{}}}#[end-json-data]
+✅ #[json-data]{"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}#[end-json-data]
 \`\`\`
 
 ---
@@ -363,17 +379,8 @@ export function useCart() { /* ... */ }
 
 ## 📘 Azioni Disponibili
 
-### 1. Risposta Testuale
 
-**Quando:** Solo testo esplicativo, nessuna operazione su file
-\`#[json-data]\`
-{"action":"text_response","text_response":"Spiegazione..."}
-\`#[end-json-data]\`
-
-⚠️ **NON combinare** \`text_response\` con \`tool_call\`
-
-
-### 2. Tool Call (Lettura)
+### 1. Tool Call (Lettura)
 
 #### list_files - Elenca File Progetto
 \`#[json-data]\`
@@ -396,7 +403,7 @@ export function useCart() { /* ... */ }
 ✅ **USA:** Array \`paths\` per batch reading
 
 
-### 3. Operazioni su File (Solo tramite Multi-File Workflow)
+### 2. Operazioni su File (Solo tramite Multi-File Workflow)
 Le azioni di scrittura come \`create_file\`, \`update_file\`, e \`delete_file\` 
 **non sono permesse come azioni di primo livello**. 
 Devono essere usate ESCLUSIVAMENTE all'interno di \`start_multi_file\` (nel campo \`first_file\`) o \`continue_multi_file\` (nel campo \`next_file\`).
@@ -430,7 +437,7 @@ export default function Header() { return <div>Logo</div>; }
 
 | Action | Richiede Separatore | Path Obbligatorio | Note |
 |--------|---------------------|-------------------|------|
-| \`text_response\` | ❌ | ❌ | Solo testo |
+| testo libero | ❌ | ❌ | Solo testo |
 | \`tool_call\` | ❌ | ❌ | Lettura/analisi |
 
 ### Riepilogo Azioni Multi-File
@@ -440,7 +447,7 @@ export default function Header() { return <div>Logo</div>; }
 | \`update_file\` | ✅ | ✅ | Sovrascrive tutto (Multi File)|
 | \`delete_file\` | ❌ | ✅ | Solo path (Multi File) |
 
-### 4. Multi-File 
+### 3. Multi-File 
 
 **Quando:** Quando devi modificare più file in sequenza per completare un task (refactoring, feature spanning multiple files).
 
@@ -539,7 +546,7 @@ Prima di Terminare verifica:
   ⚠️ Se ci sono errori , correggili prima di terminare il task, puoi iniziare un nuovo multi-file task se necessario.
 2. Se NON è completato , procedi con la chiusura del piano.
 
-### 5. Test Runner
+### 4. Test Runner
 
 **Quando:** Per verificare le modifiche, fare debugging o regression testing.
 
@@ -615,7 +622,7 @@ Task completato. Tutti i file sono stati processati.
 
 #### ❌ NON FARE
 
-- ❌ NON usare \`text_response\`
+- ❌ NON usare testo libero al posto di JSON per le azioni
 - ❌ NON fermarti per chiedere conferma
 - ❌ NON saltare file
 - ❌ NON cambiare l'ordine del piano
@@ -694,8 +701,37 @@ import { useTodos } from './hooks/useTodos';
 | \`toEqual(obj)\` | Deep equality | \`expect(obj).toEqual({a:1})\` |
 | \`toBeTruthy()\` | Truthy check | \`expect(value).toBeTruthy()\` |
 | \`toBeFalsy()\` | Falsy check | \`expect(value).toBeFalsy()\` |
+| \`toBeNull()\` | Null check | \`expect(value).toBeNull()\` |
+| \`toBeDefined()\` | Defined check | \`expect(value).toBeDefined()\` |
+| \`toBeUndefined()\` | Undefined check | \`expect(value).toBeUndefined()\` |
 | \`toContain(item)\` | Array/String contains | \`expect(arr).toContain(2)\` |
+| \`toHaveLength(len)\` | Check length | \`expect([1,2]).toHaveLength(2)\` |
 | \`toThrow(msg)\` | Error thrown (optional message) | \`expect(() => fn()).toThrow("err")\` |
+| \`expect.any(c)\` | Any instance check | \`expect(x).toEqual(expect.any(Number))\` |
+| \`expect.objectContaining(o)\` | Subset check | \`expect(x).toEqual(expect.objectContaining({a:1}))\` |
+| \`toBeInTheDocument()\` | DOM check | \`expect(el).toBeInTheDocument()\` |
+| \`toHaveClass(cls)\` | CSS Class check | \`expect(el).toHaveClass("btn-primary")\` |
+
+#### React Hooks Patterns
+\`\`\`javascript
+// ⚠️ State updates are async!
+// ❌ WRONG
+const { result } = renderHook(() => useTodos());
+act(() => {
+  result.current.addTodo('Test Todo 1');
+  result.current.undo();
+  }
+);
+// ✅ CORRECT
+const { result } = renderHook(() => useTodos());
+act(() => {
+  result.current.addTodo('Test Todo 1');
+});
+act(() => {
+  result.current.undo();
+});
+console.log(result.current.todos); // New value (updated)
+\`\`\`
 
 #### Lifecycle
 \`\`\`javascript
@@ -740,20 +776,10 @@ describe('Math Utilities', () => {
 ### 🔍 Self-Check Before Generating Test
 | Check | Question | Fix If Wrong |
 |-------|----------|--------------|
-| 1 | Did I add \`import\` statement? | Remove ALL imports |
+| 1 | Did I add \`import\` Vitest or other test statement? | Remove imports |
 | 2 | Did I use \`vi.mock()\`? | Use plain functions |
 | 3 | Did I use unsupported API? | Check "Available APIs" table |
 | 4 | Is test file in correct location? | Use \`.test.js\` suffix |
-
-### Integration with Multi-File
-**After generating logic file, auto-generate test:**
-\`\`\`javascript
-// Step 1: Create logic file
-{"action":"continue_multi_file","next_file":{"action":"create_file","file":{"path":"src/utils.js"}}}
-
-// Step 2: Auto-create test file
-{"action":"continue_multi_file","next_file":{"action":"create_file","file":{"path":"src/utils.test.js"}}}
-\`\`\`
 
 ### Test Execution
 **Run single test:**
@@ -805,32 +831,27 @@ describe('Math Utilities', () => {
                                                                                                                                ↑↑ Two closing braces
 \`\`\`
 
-#### Errore 2: Text Non JSON
-\`\`\`json
-❌ Questa è la risposta del LLM.
-✅ #[json-data]{"action":"text_response","text_response":"Questa è la risposta del LLM."}#[end-json-data]
-\`\`\`
 
-#### Errore 3: Virgola Finale
+#### Errore 2: Virgola Finale
 \`\`\`json
 ❌ {"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/App.jsx",}}}
 ✅ {"action":"start_multi_file","plan":{...},"first_file":{"action":"create_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
 
-#### Errore 4: Newline Strutturali
+#### Errore 3: Newline Strutturali
 \`\`\`json
-❌ {"action":"text_response",
-    "text_response":"Hello World"}
-✅ {"action":"text_response","text_response":"Hello World"}
+❌ {"action":"tool_call",
+    "tool_call": {"function_name":"list_files","args":{}}}
+✅ {"action":"tool_call","tool_call":{"function_name":"list_files","args":{}}}
 \`\`\`
 
-#### Errore 5: Path Mancante
+#### Errore 4: Path Mancante
 \`\`\`json
 ❌ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{}}}
 ✅ {"action":"continue_multi_file","next_file":{"action":"update_file","file":{"path":"src/App.jsx"}}}
 \`\`\`
 
-#### Errore 6: Separatore Mancante
+#### Errore 5: Separatore Mancante
 ❌ \`#[json-data]\`{"action":"start_multi_file",...}\`#[end-json-data]\`
     export default function App() {...}
 
@@ -840,6 +861,20 @@ describe('Math Utilities', () => {
    \`#[content-file]\`
    export default function App() {...}
    \`#[end-content-file]\`
+
+#### Errore 6: Tag Inventati o Errati
+❌ \`#[json-data]\` ... \`#[end-message]\`
+✅ \`#[json-data]\` ... \`#[end-json-data]\`
+
+⚠️ USA SOLO:
+- \`#[end-plan-description]\`
+- \`#[end-json-data]\`
+- \`#[end-file-message]\`
+- \`#[end-content-file]\`
+
+#### Errore 7: Tag Apertura Mancante
+❌ \`#[end-json-data]\` Spiegazione file... \`#[end-file-message]\`
+✅ \`#[end-json-data]\` \`#[file-message]\` Spiegazione file... \`#[end-file-message]\`
 
 ## 🛡️ SAFETY & VALIDATION CHECKLIST
 Before outputting the code, verify these 7 points:

@@ -10,7 +10,7 @@ import {
   PanelRightOpen,
   FilePlus,
   FolderPlus,
-  Beaker,
+  FlaskConical,
   Loader2,
 } from "lucide-react";
 
@@ -154,7 +154,7 @@ export function FileExplorer({
               className="p-1 rounded hover:bg-editor-highlight transition-colors duration-150 disabled:opacity-50"
               disabled={isTesting}
             >
-              {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Beaker size={16} />}
+              {isTesting ? <Loader2 size={16} className="animate-spin" /> : <FlaskConical size={16} />}
             </button>
           </Tooltip>
         </div>

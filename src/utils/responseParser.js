@@ -29,12 +29,17 @@ export function parseMultiPartResponse(rawResponse) {
 
   // 2. Verifica che la sezione JSON esista e sia valida
   if (!sections.jsonData) {
-    console.error("Parsing Error: Block #[json-data]...#[end-json-data] not found.");
-    // Fallback: se non ci sono marcatori, prova a trattare l'intera risposta come JSON
+    // Fallback: se non ci sono marcatori JSON, controlliamo se è un JSON puro o testo libero.
     try {
+      // Tentativo 1: È un JSON puro senza tag?
       return JSON.parse(rawResponse);
     } catch {
-      return null;
+      // Tentativo 2: È testo libero. Lo incapsuliamo in una struttura text_response.
+      // Questo rende il parser tollerante alle risposte "chat" dell'AI che non seguono il protocollo rigoroso.
+      return {
+        action: "text_response",
+        text_response: rawResponse,
+      };
     }
   }
 

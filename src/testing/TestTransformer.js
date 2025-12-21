@@ -60,6 +60,18 @@ export class TestTransformer {
       
       window.React = React; // Fallback globale
 
+      // --- Environment Setup ---
+      // Assicuriamo che esista un elemento 'root' nel DOM, poiché molto codice React
+      // (es. main.jsx) tenta di accedervi globalmente per il mounting immediato.
+      // Aggiungiamo anche 'app' che è un altro ID comune per i container principali.
+      ['root', 'app'].forEach(id => {
+        if (!document.getElementById(id)) {
+          const div = document.createElement('div');
+          div.id = id;
+          document.body.appendChild(div);
+        }
+      });
+
       // --- Iniezione di VitestCompatibleRunner ---
       ${sanitizedVitestRunner.replace(/export\s+/g, '')}
 
@@ -98,6 +110,7 @@ export class TestTransformer {
     const currentFileId = this.getFileId(file.path);
 
     let hasExports = false; // Flag per tracciare se il file esporta qualcosa
+    let hasDefaultExport = false; // Flag per tracciare se c'è un export default
     const dependencies = [];
     const codeWithoutImports = [];
     let lastIndex = 0;
@@ -179,6 +192,7 @@ export class TestTransformer {
       // Gestisce `export default ...`
       ExportDefaultDeclaration: (node) => {
         hasExports = true;
+        hasDefaultExport = true;
         // Se è `export default function App() {}` o `export default class App {}`
         // Vogliamo preservare il nome 'App' nello scope.
         if ((node.declaration.type === 'FunctionDeclaration' || node.declaration.type === 'ClassDeclaration') && node.declaration.id) {
@@ -204,6 +218,12 @@ export class TestTransformer {
     // lo avvolgiamo in un blocco per isolare lo scope delle variabili (es. mockLocalStorage).
     if (!hasExports) {
       transformedCode = `{\n${transformedCode}\n}`;
+    }
+
+    // Se non è stato trovato un export default, definiamo la variabile come undefined
+    // per evitare ReferenceError nei file che provano a importarlo (es. import App from './App').
+    if (!hasDefaultExport) {
+      transformedCode += `\nconst defaultExport_${currentFileId} = undefined;\n`;
     }
 
     // Processa prima le dipendenze (post-ordine)

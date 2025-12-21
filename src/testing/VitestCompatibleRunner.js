@@ -2,6 +2,39 @@
  * Implementazione di un mini-framework di test compatibile con la sintassi di Vitest,
  * progettato per essere eseguito interamente nel browser.
  */
+class Any {
+  constructor(constructor) {
+    this.constructorRef = constructor;
+  }
+  asymmetricMatch(other) {
+    if (this.constructorRef === String) return typeof other === 'string';
+    if (this.constructorRef === Number) return typeof other === 'number';
+    if (this.constructorRef === Boolean) return typeof other === 'boolean';
+    if (this.constructorRef === Function) return typeof other === 'function';
+    if (this.constructorRef === Object) return typeof other === 'object' && other !== null;
+    if (this.constructorRef === Array) return Array.isArray(other);
+    if (this.constructorRef === Symbol) return typeof other === 'symbol';
+    if (this.constructorRef === BigInt) return typeof other === 'bigint';
+    return other instanceof this.constructorRef;
+  }
+}
+
+class ObjectContaining {
+  constructor(sample) {
+    this.sample = sample;
+  }
+  asymmetricMatch(other, matcher) {
+    if (typeof other !== 'object' || other === null) return false;
+    for (const key in this.sample) {
+      if (Object.prototype.hasOwnProperty.call(this.sample, key)) {
+        if (!(key in other)) return false;
+        if (matcher && !matcher(other[key], this.sample[key])) return false;
+      }
+    }
+    return true;
+  }
+}
+
 export class VitestCompatibleRunner {
   constructor() {
     this.suites = [];
@@ -84,6 +117,8 @@ export class VitestCompatibleRunner {
 
   expect(value) {
     const deepEqual = (a, b) => {
+      if (b instanceof Any) return b.asymmetricMatch(a);
+      if (b instanceof ObjectContaining) return b.asymmetricMatch(a, deepEqual);
       if (a === b) return true;
       if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
       if (!a || !b || (typeof a !== 'object' && typeof b !== 'object')) return a === b;
@@ -98,47 +133,114 @@ export class VitestCompatibleRunner {
       return true;
     };
 
-    return {
-      toBe: (expected) => {
-        if (value !== expected) {
-          throw new Error(`expect(received).toBe(expected)\n\nReceived: ${value}\nExpected: ${expected}`);
-        }
-      },
-      toEqual: (expected) => {
-        if (!deepEqual(value, expected)) {
-          throw new Error(`expect(received).toEqual(expected)\n\nReceived: ${JSON.stringify(value)}\nExpected: ${JSON.stringify(expected)}`);
-        }
-      },
-      toBeTruthy: () => {
-        if (!value) {
-          throw new Error(`expect(received).toBeTruthy()\n\nReceived: ${value}`);
-        }
-      },
-      toBeFalsy: () => {
-        if (value) {
-          throw new Error(`expect(received).toBeFalsy()\n\nReceived: ${value}`);
-        }
-      },
-      toContain: (item) => {
-        if (!value || typeof value.includes !== 'function' || !value.includes(item)) {
-          throw new Error(`expect(received).toContain(expected)\n\nReceived: ${JSON.stringify(value)}\nExpected to contain: ${JSON.stringify(item)}`);
-        }
-      },
-      toThrow: (expectedError) => {
-        if (typeof value !== 'function') {
-          throw new Error('expect(received).toThrow() received must be a function');
-        }
-        try {
-          value();
-        } catch (error) {
-          if (expectedError && !error.message.includes(expectedError)) {
-            throw new Error(`expect(received).toThrow(expected)\n\nReceived error: "${error.message}"\nExpected to include: "${expectedError}"`);
+    const generateMatchers = (isNot) => {
+      return {
+        toBe: (expected) => {
+          const pass = value === expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBe(expected)\n\nReceived: ${value}\nExpected${isNot ? ' not' : ''}: ${expected}`);
           }
-          return; // Test passato, l'eccezione è stata lanciata come previsto
-        }
-        throw new Error('expect(received).toThrow()\n\nFunction did not throw.');
-      },
+        },
+        toEqual: (expected) => {
+          const pass = deepEqual(value, expected);
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toEqual(expected)\n\nReceived: ${JSON.stringify(value)}\nExpected${isNot ? ' not' : ''}: ${JSON.stringify(expected)}`);
+          }
+        },
+        toBeTruthy: () => {
+          const pass = !!value;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeTruthy()\n\nReceived: ${value}`);
+          }
+        },
+        toBeFalsy: () => {
+          const pass = !value;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeFalsy()\n\nReceived: ${value}`);
+          }
+        },
+        toBeNull: () => {
+          const pass = value === null;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeNull()\n\nReceived: ${value}`);
+          }
+        },
+        toBeDefined: () => {
+          const pass = value !== undefined;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeDefined()\n\nReceived: ${value}`);
+          }
+        },
+        toBeUndefined: () => {
+          const pass = value === undefined;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeUndefined()\n\nReceived: ${value}`);
+          }
+        },
+        toContain: (item) => {
+          const pass = value && typeof value.includes === 'function' && value.includes(item);
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toContain(expected)\n\nReceived: ${JSON.stringify(value)}\nExpected to contain: ${JSON.stringify(item)}`);
+          }
+        },
+        toHaveLength: (expected) => {
+          if (!value || typeof value.length !== 'number') {
+            throw new Error(`expect(received).toHaveLength(expected)\n\nReceived value must have a length property.\nReceived: ${value}`);
+          }
+          const pass = value.length === expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveLength(expected)\n\nExpected length: ${expected}\nReceived length: ${value.length}`);
+          }
+        },
+        toThrow: (expectedError) => {
+          if (typeof value !== 'function') {
+            throw new Error('expect(received).toThrow() received must be a function');
+          }
+          let errorThrown = null;
+          try {
+            value();
+          } catch (error) {
+            errorThrown = error;
+          }
+
+          if (isNot) {
+            if (errorThrown) {
+              throw new Error(`expect(received).not.toThrow()\n\nFunction threw: ${errorThrown.message}`);
+            }
+          } else {
+            if (!errorThrown) {
+              throw new Error('expect(received).toThrow()\n\nFunction did not throw.');
+            }
+            if (expectedError && !errorThrown.message.includes(expectedError)) {
+              throw new Error(`expect(received).toThrow(expected)\n\nReceived error: "${errorThrown.message}"\nExpected to include: "${expectedError}"`);
+            }
+          }
+        },
+        // --- DOM Matchers (jest-dom style) ---
+        toBeInTheDocument: () => {
+          if (value === null || value === undefined) {
+            throw new Error('expect(received).toBeInTheDocument()\n\nReceived value is null or undefined');
+          }
+          const pass = document.contains(value);
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeInTheDocument()\n\nElement is ${isNot ? '' : 'not '}in the document.`);
+          }
+        },
+        toHaveClass: (className) => {
+          if (!value || !value.classList || !value.classList.contains) {
+            throw new Error(`expect(received).toHaveClass("${className}")\n\nReceived value is not an element or has no classList.`);
+          }
+          const pass = value.classList.contains(className);
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveClass("${className}")\n\nReceived element does ${isNot ? '' : 'not '}have class "${className}".\nActual classes: "${value.className}"`);
+          }
+        },
+      };
     };
+
+    const matchers = generateMatchers(false);
+    matchers.not = generateMatchers(true);
+    return matchers;
   }
 
   // --- Esecuzione dei Test ---
@@ -221,6 +323,8 @@ export const describe = (name, fn) => runner.describe(name, fn);
 export const it = (name, fn) => runner.it(name, fn);
 export const test = (name, fn) => runner.test(name, fn);
 export const expect = (value) => runner.expect(value);
+expect.any = (constructor) => new Any(constructor);
+expect.objectContaining = (sample) => new ObjectContaining(sample);
 export const beforeEach = (fn) => runner.beforeEach(fn);
 export const afterEach = (fn) => runner.afterEach(fn);
 export const beforeAll = (fn) => runner.beforeAll(fn);
