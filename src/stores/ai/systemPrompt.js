@@ -709,8 +709,16 @@ import { useTodos } from './hooks/useTodos';
 | \`toThrow(msg)\` | Error thrown (optional message) | \`expect(() => fn()).toThrow("err")\` |
 | \`expect.any(c)\` | Any instance check | \`expect(x).toEqual(expect.any(Number))\` |
 | \`expect.objectContaining(o)\` | Subset check | \`expect(x).toEqual(expect.objectContaining({a:1}))\` |
+| \`toHaveBeenCalled()\` | Mock check | \`expect(myMock).toHaveBeenCalled()\` |
+| \`toHaveBeenCalledTimes(n)\` | Mock check | \`expect(myMock).toHaveBeenCalledTimes(3)\` |
+| \`toHaveBeenCalledWith(a,b)\` | Mock check | \`expect(myMock).toHaveBeenCalledWith(1, 'arg')\` |
 | \`toBeInTheDocument()\` | DOM check | \`expect(el).toBeInTheDocument()\` |
 | \`toHaveClass(cls)\` | CSS Class check | \`expect(el).toHaveClass("btn-primary")\` |
+| \`toBeGreaterThan(n)\` | Numeric check | \`expect(10).toBeGreaterThan(5)\` |
+| \`toBeGreaterThanOrEqual(n)\` | Numeric check | \`expect(10).toBeGreaterThanOrEqual(10)\` |
+| \`toBeLessThan(n)\` | Numeric check | \`expect(5).toBeLessThan(10)\` |
+| \`toBeLessThanOrEqual(n)\` | Numeric check | \`expect(5).toBeLessThanOrEqual(5)\` |
+| \`toBeCloseTo(n, p)\` | Float check | \`expect(0.1 + 0.2).toBeCloseTo(0.3)\` |
 
 #### React Hooks Patterns
 \`\`\`javascript
@@ -739,6 +747,20 @@ beforeAll(() => { /* Setup once before all tests */ });
 afterAll(() => { /* Cleanup once after all tests */ });
 beforeEach(() => { /* Setup before each test */ });
 afterEach(() => { /* Cleanup after each test */ });
+\`\`\`
+
+### Mocking
+\`vi.fn()\` is available to create mock functions. It is available globally in the test scope.
+
+\`\`\`javascript
+test('should call the callback', () => {
+  const callback = vi.fn();
+  const user = { name: 'John' };
+  myFunctionThatCalls(callback, user);
+  expect(callback).toHaveBeenCalled();
+  expect(callback).toHaveBeenCalledTimes(1);
+  expect(callback).toHaveBeenCalledWith(user);
+});
 \`\`\`
 
 ### ❌ NOT SUPPORTED

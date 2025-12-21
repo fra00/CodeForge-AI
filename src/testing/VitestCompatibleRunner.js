@@ -35,6 +35,20 @@ class ObjectContaining {
   }
 }
 
+function createMockFunction(implementation) {
+  const mockFn = function(...args) {
+    mockFn.mock.calls.push(args);
+    if (implementation) {
+      return implementation.apply(this, args);
+    }
+  };
+  mockFn.mock = {
+    calls: [],
+  };
+  mockFn._isMockFunction = true; // Marker for our matchers
+  return mockFn;
+}
+
 export class VitestCompatibleRunner {
   constructor() {
     this.suites = [];
@@ -235,6 +249,86 @@ export class VitestCompatibleRunner {
             throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveClass("${className}")\n\nReceived element does ${isNot ? '' : 'not '}have class "${className}".\nActual classes: "${value.className}"`);
           }
         },
+
+        // --- Numeric Matchers ---
+        toBeGreaterThan: (expected) => {
+          if (typeof value !== 'number' || typeof expected !== 'number') {
+            throw new Error('expect(received).toBeGreaterThan(expected) expected numbers');
+          }
+          const pass = value > expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeGreaterThan(expected)\n\nReceived: ${value}\nExpected: ${expected}`);
+          }
+        },
+        toBeGreaterThanOrEqual: (expected) => {
+          if (typeof value !== 'number' || typeof expected !== 'number') {
+            throw new Error('expect(received).toBeGreaterThanOrEqual(expected) expected numbers');
+          }
+          const pass = value >= expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeGreaterThanOrEqual(expected)\n\nReceived: ${value}\nExpected: ${expected}`);
+          }
+        },
+        toBeLessThan: (expected) => {
+          if (typeof value !== 'number' || typeof expected !== 'number') {
+            throw new Error('expect(received).toBeLessThan(expected) expected numbers');
+          }
+          const pass = value < expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeLessThan(expected)\n\nReceived: ${value}\nExpected: ${expected}`);
+          }
+        },
+        toBeLessThanOrEqual: (expected) => {
+          if (typeof value !== 'number' || typeof expected !== 'number') {
+            throw new Error('expect(received).toBeLessThanOrEqual(expected) expected numbers');
+          }
+          const pass = value <= expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeLessThanOrEqual(expected)\n\nReceived: ${value}\nExpected: ${expected}`);
+          }
+        },
+        toBeCloseTo: (expected, precision = 2) => {
+          if (typeof value !== 'number' || typeof expected !== 'number') {
+            throw new Error('expect(received).toBeCloseTo(expected) expected numbers');
+          }
+          const pass = Math.abs(expected - value) < (Math.pow(10, -precision) / 2);
+          if (isNot ? pass : !pass) {
+            const received = value;
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeCloseTo(expected, precision)\n\nExpected: ${expected}\nReceived: ${received}\nPrecision: ${precision}`);
+          }
+        },
+
+        // --- Mock Matchers ---
+        toHaveBeenCalled: () => {
+          if (!value || !value._isMockFunction) {
+            throw new Error('expect(received).toHaveBeenCalled() received must be a mock function.');
+          }
+          const pass = value.mock.calls.length > 0;
+          if (isNot ? pass : !pass) {
+            const negation = isNot ? 'not ' : '';
+            throw new Error(`Expected mock function ${negation}to be called, but it was called ${value.mock.calls.length} times.`);
+          }
+        },
+        toHaveBeenCalledTimes: (expected) => {
+          if (!value || !value._isMockFunction) {
+            throw new Error('expect(received).toHaveBeenCalledTimes() received must be a mock function.');
+          }
+          const pass = value.mock.calls.length === expected;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveBeenCalledTimes(expected)\n\nExpected: ${expected}\nReceived: ${value.mock.calls.length}`);
+          }
+        },
+        toHaveBeenCalledWith: (...expectedArgs) => {
+          if (!value || !value._isMockFunction) {
+            throw new Error('expect(received).toHaveBeenCalledWith() received must be a mock function.');
+          }
+          // Check if at least one call matches the expected arguments
+          const pass = value.mock.calls.some(callArgs => deepEqual(callArgs, expectedArgs));
+          if (isNot ? pass : !pass) {
+            const receivedCalls = value.mock.calls.map(args => JSON.stringify(args)).join('\n  ');
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveBeenCalledWith(expected)\n\nExpected: ${JSON.stringify(expectedArgs)}\nReceived:\n  ${receivedCalls || '(no calls)'}`);
+          }
+        },
       };
     };
 
@@ -329,6 +423,9 @@ export const beforeEach = (fn) => runner.beforeEach(fn);
 export const afterEach = (fn) => runner.afterEach(fn);
 export const beforeAll = (fn) => runner.beforeAll(fn);
 export const afterAll = (fn) => runner.afterAll(fn);
+export const vi = {
+  fn: (implementation) => createMockFunction(implementation),
+};
 
 // Istanza globale del runner
 export let runner = new VitestCompatibleRunner();
