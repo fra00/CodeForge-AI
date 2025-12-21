@@ -750,7 +750,7 @@ afterEach(() => { /* Cleanup after each test */ });
 \`\`\`
 
 ### Mocking
-\`vi.fn()\` is available to create mock functions. It is available globally in the test scope.
+\`vi.fn()\` and \`vi.spyOn()\` are available globally.
 
 \`\`\`javascript
 test('should call the callback', () => {
@@ -761,10 +761,22 @@ test('should call the callback', () => {
   expect(callback).toHaveBeenCalledTimes(1);
   expect(callback).toHaveBeenCalledWith(user);
 });
+
+test('should spy on object method', () => {
+  const cart = {
+    add: (item) => console.log('added', item)
+  };
+  const spy = vi.spyOn(cart, 'add');
+  
+  cart.add('apple');
+  expect(spy).toHaveBeenCalledWith('apple');
+  
+  spy.mockRestore(); // Restore original method
+});
 \`\`\`
 
 ### ❌ NOT SUPPORTED
-- ❌ \`vi.mock()\` / \`vi.spyOn()\`
+- ❌ \`vi.mock()\` (Module mocking not supported in browser)
 - ❌ \`test.concurrent()\`
 - ❌ \`expect.extend()\`
 - ❌ Snapshot testing

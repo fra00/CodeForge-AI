@@ -35,17 +35,36 @@ class ObjectContaining {
   }
 }
 
-function createMockFunction(implementation) {
+function createMockFunction(initialImplementation) {
+  let implementation = initialImplementation;
+
   const mockFn = function(...args) {
     mockFn.mock.calls.push(args);
+    let result;
     if (implementation) {
-      return implementation.apply(this, args);
+      try {
+        result = implementation.apply(this, args);
+        mockFn.mock.results.push({ type: 'return', value: result });
+        return result;
+      } catch (error) {
+        mockFn.mock.results.push({ type: 'throw', value: error });
+        throw error;
+      }
+    } else {
+      mockFn.mock.results.push({ type: 'return', value: undefined });
     }
   };
   mockFn.mock = {
     calls: [],
+    results: [],
   };
   mockFn._isMockFunction = true; // Marker for our matchers
+  
+  // API per modificare il comportamento del mock
+  mockFn.mockImplementation = (newImpl) => { implementation = newImpl; return mockFn; };
+  mockFn.mockReturnValue = (val) => { implementation = () => val; return mockFn; };
+  mockFn.mockRestore = () => {}; // No-op per fn standard, sovrascritto da spyOn
+
   return mockFn;
 }
 
@@ -425,6 +444,22 @@ export const beforeAll = (fn) => runner.beforeAll(fn);
 export const afterAll = (fn) => runner.afterAll(fn);
 export const vi = {
   fn: (implementation) => createMockFunction(implementation),
+  spyOn: (obj, methodName) => {
+    if (!obj || typeof obj[methodName] !== 'function') {
+      throw new Error(`Cannot spyOn method "${methodName}". It is not a function.`);
+    }
+    const originalImplementation = obj[methodName];
+    // Crea un mock che chiama l'originale di default
+    const mockFn = createMockFunction(originalImplementation);
+    
+    // Sostituisce il metodo sull'oggetto
+    obj[methodName] = mockFn;
+    
+    // Aggiunge la capacità di ripristino
+    mockFn.mockRestore = () => { obj[methodName] = originalImplementation; };
+    
+    return mockFn;
+  },
 };
 
 // Istanza globale del runner

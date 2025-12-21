@@ -60,15 +60,7 @@ Include un **Test Runner personalizzato** (`VitestCompatibleRunner`) che emula l
 
 4.  Apri il browser all'indirizzo `http://localhost:5173`.
 
-## 📖 Guida Rapida all'Uso
-
-1.  **Avvia una Chat**: Usa il pannello a destra per descrivere cosa vuoi creare o modificare (es. "Crea un componente Navbar").
-2.  **Modifiche Multi-File**: L'AI pianificherà le modifiche necessarie. Conferma l'esecuzione per applicarle al File System virtuale.
-3.  **Live Preview**: Osserva le modifiche in tempo reale nel pannello di anteprima centrale.
-4.  **Testing**: Scrivi test in `src/tests/` e eseguili dal pannello inferiore per garantire la stabilità del codice.
-5.  **Export**: Scarica il progetto come ZIP dall'header per continuare a lavorare localmente o fare il deploy.
-
-## � Struttura del Progetto
+## 📂 Struttura del Progetto
 
 - `src/components/`: Componenti UI (Editor, AI Panel, FileSystem, ecc.).
 - `src/stores/`: Gestione dello stato globale (Zustand).
@@ -89,6 +81,24 @@ L'AI opera seguendo un **Decision Protocol** rigoroso definito nel `systemPrompt
 4.  **RISPONDI:** Fornisce feedback all'utente.
 
 Le risposte dell'AI vengono parsate da `responseParser.js` che converte i blocchi di testo strutturati (es. `#[json-data]`) in azioni eseguibili dall'applicazione.
+
+## 📐 Architecture Decisions
+
+### 1. In-Browser Testing vs WebContainers
+
+La scelta di implementare un **Custom Test Runner** (`VitestCompatibleRunner`) invece di utilizzare soluzioni come WebContainers è stata guidata da:
+
+- **Performance:** Boot istantaneo senza dover avviare un container Node.js completo.
+- **Semplicità:** Nessun requisito di header di sicurezza complessi (`SharedArrayBuffer`), permettendo il deploy su qualsiasi host statico.
+- **Integrazione:** Controllo totale sull'esecuzione e sulla cattura degli errori per l'auto-debugging dell'AI.
+
+### 2. Hybrid AI Protocol
+
+Il sistema utilizza un protocollo ibrido per la comunicazione con l'LLM:
+
+- **JSON Strutturato:** Per azioni critiche (`start_multi_file`, `run_test`) dove la precisione dei dati è fondamentale.
+- **Testo Libero:** Per le risposte discorsive, riducendo la fragilità del parsing e il consumo di token.
+  Questo approccio ("Sweet Spot") garantisce robustezza operativa senza sacrificare la naturalezza della conversazione.
 
 ## 🤝 Contributing
 
