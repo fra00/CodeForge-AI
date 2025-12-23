@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
 import { useFileStore } from "../../stores/useFileStore";
 import { useAIStore } from "../../stores/useAIStore";
 import errorCatcherCode from "./error-catcher.js?raw"; // Importa il codice come stringa
@@ -121,6 +127,21 @@ export function LivePreview({ className = "", onRefresh: onRefreshProp }) {
   // Usiamo questa key SOLO per il pulsante "Refresh" manuale, non per ogni tasto premuto
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Ref per il contenitore della preview per calcolare l'altezza disponibile
+  const containerRef = useRef(null);
+  const [containerHeight, setContainerHeight] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // --- LISTENER PER L'ERROR CATCHER ---
   // La dichiarazione di handleLog deve precedere il suo utilizzo nell'useEffect.
   const handleLog = useCallback((logItem) => {
@@ -220,7 +241,7 @@ export function LivePreview({ className = "", onRefresh: onRefreshProp }) {
       showOpenInCodeSandbox={false}
       showRefreshButton={true}
       showNavigator={true}
-      style={{ height: "100%" }}
+      style={{ height: containerHeight ? `${containerHeight}px` : "100%" }}
     />
   );
 
@@ -277,7 +298,7 @@ export function LivePreview({ className = "", onRefresh: onRefreshProp }) {
 
       {/* Il provider stesso non ha bisogno di classi di layout, ma i suoi figli sì.
           Usiamo flex-1 per dire a questo contenitore di riempire lo spazio disponibile. */}
-      <div className="flex-1 relative min-h-0">
+      <div ref={containerRef} className="flex-1 relative min-h-0">
         {isWindowOpen ? (
           // --- CASE 1: Window is Open ---
           <>
