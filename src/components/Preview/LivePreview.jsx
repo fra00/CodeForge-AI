@@ -220,6 +220,7 @@ export function LivePreview({ className = "", onRefresh: onRefreshProp }) {
       showOpenInCodeSandbox={false}
       showRefreshButton={true}
       showNavigator={true}
+      style={{ height: "100%" }}
     />
   );
 

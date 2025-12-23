@@ -8,6 +8,7 @@ import { ChatMessage } from "./ChatMessage";
 import { PromptInput } from "./PromptInput";
 import Alert from "../ui/Alert";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
+import { KnowledgeCacheIndicator } from "./KnowledgeCacheIndicator";
 
 const DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20240620";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -118,24 +119,27 @@ export function AIPanel({
     // Il pannello della cronologia è stato spostato in App.jsx per un controllo di layout globale.
     <div className="flex flex-col h-full w-full bg-editor-bg text-white">
       {/* Header con selezione ambiente */}
-      <div className="flex items-center justify-end p-2 border-b border-editor-border h-10 text-xs flex-shrink-0">
-        <label htmlFor="env-select" className="mr-2 text-gray-400">
-          Contesto:
-        </label>
-        <select
-          id="env-select"
-          value={currentEnvironment}
-          onChange={handleEnvironmentChange}
-          disabled={isGenerating}
-          className="bg-editor-highlight border border-editor-border rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          title="Seleziona il contesto di programmazione per l'AI"
-        >
-          {Object.entries(ENVIRONMENTS).map(([key, { label }]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
+      <div className="flex items-center justify-between p-2 border-b border-editor-border h-10 text-xs flex-shrink-0">
+        <KnowledgeCacheIndicator />
+        <div className="flex items-center">
+          <label htmlFor="env-select" className="mr-2 text-gray-400">
+            Contesto:
+          </label>
+          <select
+            id="env-select"
+            value={currentEnvironment}
+            onChange={handleEnvironmentChange}
+            disabled={isGenerating}
+            className="bg-editor-highlight border border-editor-border rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            title="Seleziona il contesto di programmazione per l'AI"
+          >
+            {Object.entries(ENVIRONMENTS).map(([key, { label }]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Area Chat Principale */}

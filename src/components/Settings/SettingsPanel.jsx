@@ -2,6 +2,7 @@ import React from "react";
 import { APIKeySettings } from "./APIKeySettings";
 import { CustomPromptSettings } from "./CustomPromptSettings"; // Importa il nuovo componente
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useAIStore } from "../../stores/useAIStore";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
 import ToggleSwitch from "../ui/ToggleSwitch";
@@ -21,7 +22,15 @@ export function SettingsPanel() {
     setWordWrap,
     setMinimapEnabled,
     setAiModel,
+    isKnowledgeCacheEnabled,
+    knowledgeCacheThreshold,
+    setIsKnowledgeCacheEnabled,
+    setKnowledgeCacheThreshold,
   } = useSettingsStore();
+
+  const { updateChatKnowledge, currentChatId, conversations } = useAIStore();
+  const currentChat = conversations.find((c) => c.id === currentChatId);
+  const isSummarizing = currentChat?.isSummarizing || false;
 
   const wordWrapOptions = [
     { value: "off", label: "Off" },
@@ -52,6 +61,52 @@ export function SettingsPanel() {
           value={aiModel}
           onChange={(e) => setAiModel(e.target.value)}
         />
+
+        {/* Knowledge Cache Settings */}
+        <div className="pt-4 border-t border-editor-border space-y-4">
+          <h3 className="text-base font-medium text-white">
+            Memoria a Lungo Termine
+          </h3>
+          <div className="flex items-center space-x-3">
+            <ToggleSwitch
+              id="knowledge-cache-toggle"
+              checked={isKnowledgeCacheEnabled}
+              onChange={() =>
+                setIsKnowledgeCacheEnabled(!isKnowledgeCacheEnabled)
+              }
+            />
+            <label
+              htmlFor="knowledge-cache-toggle"
+              className="text-sm text-editor-border cursor-pointer"
+            >
+              Abilita Knowledge Cache
+            </label>
+          </div>
+          {isKnowledgeCacheEnabled && (
+            <div className="space-y-3">
+              <Input
+                id="knowledge-threshold-input"
+                label="Soglia Messaggi per Sintesi (5-50)"
+                type="number"
+                value={knowledgeCacheThreshold}
+                onChange={(e) => setKnowledgeCacheThreshold(e.target.value)}
+                min={5}
+                max={50}
+              />
+              <button
+                onClick={() =>
+                  currentChatId && updateChatKnowledge(currentChatId)
+                }
+                disabled={isSummarizing || !currentChatId}
+                className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSummarizing
+                  ? "Sintesi in corso..."
+                  : "Forza Sintesi Manuale"}
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Sezione Editor */}

@@ -25,6 +25,9 @@ const DEFAULT_SETTINGS = {
   chatHistoryVisible: true,
   editorPreviewSplitSize: 50, // Dimensione di default 50%
   customSystemPrompt: "", // Aggiunto per il prompt di sistema custom
+  // Knowledge Cache
+  isKnowledgeCacheEnabled: true,
+  knowledgeCacheThreshold: 10,
 };
 
 /**
@@ -85,6 +88,12 @@ export const useSettingsStore = create(
         setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
         setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
         setCustomSystemPrompt: (customSystemPrompt) => set({ customSystemPrompt }),
+        
+        // Azioni per Knowledge Cache
+        setIsKnowledgeCacheEnabled: (enabled) => set({ isKnowledgeCacheEnabled: !!enabled }),
+        setKnowledgeCacheThreshold: (threshold) => {
+          set({ knowledgeCacheThreshold: Math.max(5, Math.min(50, Number(threshold) || 10)) });
+        },
 
         // Azioni per l'UI
         setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),
