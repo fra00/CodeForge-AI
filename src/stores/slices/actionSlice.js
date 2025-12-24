@@ -29,7 +29,7 @@ export const createActionSlice = (set, get) => ({
 
     addMessage({
       id: `${Date.now()}-tool-status`,
-      role: "file-status",
+      role: "status",
       content: `Executing: ${tool_call.function_name} ${logArgs}`,
     });
 
@@ -139,7 +139,7 @@ export const createActionSlice = (set, get) => ({
     if (next_file.action === "noop" && next_file.is_last_file) {
       addMessage({
         id: `${Date.now()}-res`,
-        role: "file-status",
+        role: "status",
         content: "Task marked as complete by AI.",
       });
       set({ multiFileTaskState: null });

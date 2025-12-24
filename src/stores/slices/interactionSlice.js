@@ -179,7 +179,7 @@ export const createInteractionSlice = (set, get) => ({
         if (response.truncated) {
           addMessage({
             id: Date.now().toString(),
-            role: "assistant",
+            role: "status",
             content: "⚠️ Risposta troncata (limite token).",
           });
           set({ isStreaming: false });
@@ -206,7 +206,7 @@ export const createInteractionSlice = (set, get) => ({
           console.error("Failed to parse AI response.", rawText);
           addMessage({
             id: Date.now().toString(),
-            role: "assistant",
+            role: "status",
             content:
               "⚠️ Error: Could not parse the response structure. Raw response:\n" +
               rawText,
@@ -248,7 +248,7 @@ export const createInteractionSlice = (set, get) => ({
       if (toolCallCount >= maxToolCalls) {
         addMessage({
           id: Date.now().toString(),
-          role: "assistant",
+          role: "status",
           content: `⚠️ Operation count limit reached ${maxToolCalls} calls.`,
         });
       }
@@ -287,7 +287,7 @@ export const createInteractionSlice = (set, get) => ({
       set({ isStreaming: false, abortController: null });
       addMessage({
         id: Date.now().toString(),
-        role: "assistant",
+        role: "status",
         content: `✓ Task completed. Total tool calls: ${toolCallCount}.`,
       });
       await get().saveConversation();
