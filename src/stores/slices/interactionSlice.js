@@ -3,7 +3,7 @@ import { parseMultiPartResponse } from "../../utils/responseParser";
 import {
   buildSystemPrompt,
   getProjectStructurePrompt,
-} from "../ai/systemPrompt";
+} from "../ai/systemPromptCompact";
 import { getResponseSchema } from "../ai/responseSchema";
 import { FRAMEWORK_2WHAV_PROMPT } from "../ai/2whavPrompt";
 import { useFileStore } from "../useFileStore";
