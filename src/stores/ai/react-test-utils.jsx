@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { act } from "react";
+import React, { act } from "react";
 
 // Variabili globali per tracciare il container corrente
 let currentRoot = null;
@@ -70,5 +70,25 @@ export const fireEvent = {
     });
   },
 };
+
+/**
+ * Utility per testare custom hooks senza usare JSX.
+ * Esempio: const { result } = renderHook(() => useMyHook());
+ */
+export function renderHook(hookFn) {
+  const result = { current: null };
+
+  function TestComponent() {
+    const hookResult = hookFn();
+    // Usiamo un ref o assegnazione diretta per catturare il valore
+    result.current = hookResult;
+    return null;
+  }
+
+  // Usiamo React.createElement invece di JSX per compatibilità con il runner
+  render(React.createElement(TestComponent));
+
+  return { result };
+}
 
 export { act };

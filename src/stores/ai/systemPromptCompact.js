@@ -253,6 +253,8 @@ Before generating code:
 1. **Read First**: \`read_file\` ALL referenced modules
 2. **Verify APIs**: Check function signatures before calling
 3. **Breaking Changes**: Update ALL callers via multi-file
+4. **🚨 SURGICAL ONLY**: Modify ONLY requested code. Preserve ALL else unchanged (functions, imports, logic). Never simplify unrequested code.
+
 
 Universal Checks:
 - **Dependencies**: Verify function/class exists before calling
@@ -277,7 +279,8 @@ Browser-based sandbox (no Node.js, no npm). Test runner pre-loaded.
 2. **IMPORT DEPENDENCIES**: Always import code under test
 3. **VITEST SYNTAX**: Compatible syntax, but limited feature set
 4. **NO \`vi.mock()\`**: Module mocking is NOT supported. Use dependency injection or \`vi.spyOn\` on globals.
-5. **NO \`vi.clearAllMocks()\`**: This function does not exist. Re-create mocks in \`beforeEach\` to reset state.
+5. **NO \`vi.clearAllMocks()\`**: Global clear is not supported. Use \`mockFn.mockClear()\` on individual mocks in \`beforeEach\`.
+6. **NO JSX**: The runner executes in-browser without compilation. JSX (\`<Comp />\`) causes syntax errors. Use \`React.createElement\` or \`renderHook\`.
 
 ### Available APIs:
 
@@ -304,27 +307,25 @@ describe('Component', () => {
 
 **Advanced Matchers**: \`expect.any(Constructor)\`, \`expect.objectContaining({ prop: value })\`
 
-**Mocking**: \`vi.fn()\` and \`vi.spyOn()\` available globally
+**Mocking**: \`vi.fn()\` and \`vi.spyOn()\` available globally. Mocks support \`.mockClear()\`, \`.mockReset()\`, \`.mockImplementation()\`, \`.mockReturnValue()\`, \`.mockImplementationOnce()\`, \`.mockReturnValueOnce()\`.
 
 **React Hooks**: State updates are async - use separate \`act()\` calls
 
 **Lifecycle**: \`beforeAll\`, \`afterAll\`, \`beforeEach\`, \`afterEach\`
 
-### Component Testing (React)
-Use \`src/testing/react-test-utils.jsx\` for rendering.
+### Testing React Logic (Hooks)
+Use \`renderHook\` from \`src/testing/react-test-utils.jsx\` to test hooks without JSX.
 
 \`\`\`javascript
-import { render, cleanup, fireEvent, act } from '../testing/react-test-utils';
-import { Button } from './Button';
+import { renderHook, act, cleanup } from '../testing/react-test-utils';
+import { useCounter } from './useCounter';
 
 afterEach(cleanup);
 
-test('renders button', () => {
-  const { getByText } = render(<Button>Click me</Button>);
-  const button = getByText('Click me');
-  expect(button).toBeInTheDocument();
-  
-  fireEvent.click(button);
+test('should increment', () => {
+  const { result } = renderHook(() => useCounter());
+  act(() => result.current.increment());
+  expect(result.current.count).toBe(1);
 });
 \`\`\`
 
@@ -342,6 +343,7 @@ Before EVERY response, verify:
 | 4 | Correct markers (#[tag] + #[end-tag]) | Add markers |
 | 5 | Marker order (plan → json → file-message → content) | Reorder |
 | 6 | Single action per response | Split response |
+| 7 | **🚨 NO REGRESSIONS**: Same function count? All imports preserved? Unmodified code identical? Changes scope-limited? | **Read original again, regenerate with FULL code** |
 
 **If ANY check fails**: STOP. Regenerate complete response with fixes.
 

@@ -37,13 +37,20 @@ class ObjectContaining {
 
 function createMockFunction(initialImplementation) {
   let implementation = initialImplementation;
+  let onceImplementations = [];
 
   const mockFn = function(...args) {
     mockFn.mock.calls.push(args);
     let result;
-    if (implementation) {
+    
+    let currentImpl = implementation;
+    if (onceImplementations.length > 0) {
+      currentImpl = onceImplementations.shift();
+    }
+
+    if (currentImpl) {
       try {
-        result = implementation.apply(this, args);
+        result = currentImpl.apply(this, args);
         mockFn.mock.results.push({ type: 'return', value: result });
         return result;
       } catch (error) {
@@ -63,7 +70,20 @@ function createMockFunction(initialImplementation) {
   // API per modificare il comportamento del mock
   mockFn.mockImplementation = (newImpl) => { implementation = newImpl; return mockFn; };
   mockFn.mockReturnValue = (val) => { implementation = () => val; return mockFn; };
+  mockFn.mockImplementationOnce = (newImpl) => { onceImplementations.push(newImpl); return mockFn; };
+  mockFn.mockReturnValueOnce = (val) => { onceImplementations.push(() => val); return mockFn; };
   mockFn.mockRestore = () => {}; // No-op per fn standard, sovrascritto da spyOn
+
+  mockFn.mockClear = () => {
+    mockFn.mock.calls = [];
+    mockFn.mock.results = [];
+  };
+
+  mockFn.mockReset = () => {
+    mockFn.mockClear();
+    implementation = undefined;
+    onceImplementations = [];
+  };
 
   return mockFn;
 }

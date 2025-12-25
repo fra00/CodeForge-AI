@@ -640,6 +640,7 @@ Task completato. Tutti i file sono stati processati.
 1. **Read First**: \`read_file\` for ALL referenced modules/files
 2. **Verify APIs**: Check signatures before calling functions/methods
 3. **Breaking Changes**: Modifying public API → update ALL callers via multi-file
+4. **🚨 SURGICAL ONLY**: Modify ONLY requested code. Preserve ALL else unchanged (functions, imports, logic). Never simplify unrequested code.
 
 ### Universal Checks (Apply to ALL languages)
 
