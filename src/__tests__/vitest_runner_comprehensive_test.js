@@ -11,6 +11,7 @@ import {
   afterEach as compatAfterEach,
   renderHook as compatRenderHook, 
   act as compatAct,
+  cleanup as compatCleanup,
   runner,
   resetRunner,
 } from "../testing/VitestCompatibleRunner";
@@ -25,6 +26,7 @@ describe("VitestCompatibleRunner Unit Tests (Node/JSDOM)", () => {
     // Pulizia DOM e Mock reali tra i test
     document.body.innerHTML = '';
     vi.restoreAllMocks(); 
+    localStorage.clear();
   });
 
   describe("Runner Engine & Matchers", () => {
@@ -242,6 +244,16 @@ describe("VitestCompatibleRunner Unit Tests (Node/JSDOM)", () => {
 
       const { result } = compatRenderHook(() => useMyContext(), { wrapper });
       expect(result.current).toBe("provided");
+    });
+
+    test("cleanup should clear localStorage", () => {
+      // Setup sporco
+      localStorage.setItem("test-key", "dirty");
+      
+      // Eseguiamo cleanup
+      compatCleanup();
+      
+      expect(localStorage.getItem("test-key")).toBeNull();
     });
   });
 
