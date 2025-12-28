@@ -331,6 +331,7 @@ Browser-based sandbox (no Node.js, no npm). Test runner pre-loaded.
 3. **VITEST SYNTAX**: Compatible syntax, but limited feature set
 4. **NO \`vi.mock()\`**: Module mocking is NOT supported. Use dependency injection or \`vi.spyOn\` on globals.
 5. **NO JSX/UI**: The runner executes in-browser without compilation. JSX (\`<Comp />\`) causes syntax errors. Test ONLY logic and hooks using \`renderHook\`. Do NOT test UI components.
+6. **STRICT API LIMIT**: Use ONLY the methods explicitly listed below. Do NOT use other Vitest/Jest features (e.g. snapshots, inline snapshots, coverage, setSystemTime) as they will cause runtime errors.
 
 ### Available APIs:
 

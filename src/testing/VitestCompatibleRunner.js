@@ -457,11 +457,66 @@ export class VitestCompatibleRunner {
             throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveBeenCalledWith(expected)\n\nExpected: ${JSON.stringify(expectedArgs)}\nReceived:\n  ${receivedCalls || '(no calls)'}`);
           }
         },
+        
+        // --- Extended DOM Matchers (Commonly used by AI) ---
+        toHaveTextContent: (text) => {
+          if (!value || typeof value.textContent !== 'string') {
+             throw new Error('expect(received).toHaveTextContent() received must be an HTMLElement');
+          }
+          const pass = value.textContent.includes(text);
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveTextContent("${text}")\n\nReceived text: "${value.textContent}"`);
+          }
+        },
+        toHaveValue: (expectedValue) => {
+          if (!value || value.value === undefined) {
+             throw new Error('expect(received).toHaveValue() received must be a form element with a value');
+          }
+          const pass = value.value === expectedValue;
+          if (isNot ? pass : !pass) {
+            throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveValue("${expectedValue}")\n\nReceived value: "${value.value}"`);
+          }
+        },
+        toHaveAttribute: (attr, expectedValue) => {
+          if (!value || !value.getAttribute) throw new Error('expect(received).toHaveAttribute() received must be an Element');
+          const hasAttr = value.hasAttribute(attr);
+          const attrVal = value.getAttribute(attr);
+          const pass = expectedValue === undefined ? hasAttr : attrVal === expectedValue;
+           if (isNot ? pass : !pass) throw new Error(`expect(received)${isNot ? '.not' : ''}.toHaveAttribute("${attr}", "${expectedValue}") failed.`);
+        },
+        toBeDisabled: () => {
+           const pass = value && value.disabled === true;
+           if (isNot ? pass : !pass) throw new Error(`expect(received)${isNot ? '.not' : ''}.toBeDisabled() failed.`);
+        },
+
+        // --- Unsupported / Stubbed Matchers for LLM Guidance ---
+        toMatchSnapshot: () => {
+           throw new Error("[Vitest Lite] Snapshot testing (toMatchSnapshot) is not supported in this browser environment. Please use 'toEqual' or specific property assertions instead.");
+        },
+        toMatchInlineSnapshot: () => {
+           throw new Error("[Vitest Lite] Snapshot testing (toMatchInlineSnapshot) is not supported. Please use 'toEqual' or specific property assertions instead.");
+        },
+        toThrowErrorMatchingSnapshot: () => {
+           throw new Error("[Vitest Lite] Snapshot testing is not supported. Please check the error message string explicitly using 'toThrow'.");
+        },
+        toThrowErrorMatchingInlineSnapshot: () => {
+           throw new Error("[Vitest Lite] Snapshot testing is not supported. Please check the error message string explicitly using 'toThrow'.");
+        },
       };
     };
 
     const matchers = generateMatchers(false);
     matchers.not = generateMatchers(true);
+
+    // --- Async Matchers Stubs ---
+    // Intercettiamo l'accesso a .resolves e .rejects per guidare l'LLM
+    Object.defineProperty(matchers, 'resolves', {
+      get: () => { throw new Error("[Vitest Lite] Async matchers (.resolves) are not supported. Please use 'const result = await promise; expect(result)...' instead."); }
+    });
+    Object.defineProperty(matchers, 'rejects', {
+      get: () => { throw new Error("[Vitest Lite] Async matchers (.rejects) are not supported. Please use 'try { await promise; } catch(e) { expect(e)... }' instead."); }
+    });
+
     return matchers;
   }
 
@@ -664,7 +719,25 @@ export const vi = {
          if (!inserted) fakeTimers.queue.push(nextTask);
        }
     }
-  }
+  },
+
+  // --- Unsupported / Stubbed Methods for LLM Guidance ---
+  mock: () => { throw new Error("[Vitest Lite] Module mocking (vi.mock) is not supported in this browser environment. Please use Dependency Injection or vi.spyOn() on globals."); },
+  unmock: () => { throw new Error("[Vitest Lite] vi.unmock is not supported."); },
+  doMock: () => { throw new Error("[Vitest Lite] vi.doMock is not supported."); },
+  importActual: () => { throw new Error("[Vitest Lite] vi.importActual is not supported."); },
+  
+  setSystemTime: () => { throw new Error("[Vitest Lite] vi.setSystemTime is not supported. Please use 'vi.useFakeTimers()' and 'vi.advanceTimersByTime()' to manipulate time."); },
+  getMockedSystemTime: () => { throw new Error("[Vitest Lite] vi.getMockedSystemTime is not supported."); },
+  getRealSystemTime: () => { throw new Error("[Vitest Lite] vi.getRealSystemTime is not supported."); },
+  
+  resetModules: () => { throw new Error("[Vitest Lite] vi.resetModules is not supported as there is no module registry to reset."); },
+  isolateModules: () => { throw new Error("[Vitest Lite] vi.isolateModules is not supported."); },
+  setConfig: () => { throw new Error("[Vitest Lite] vi.setConfig is not supported."); },
+  
+  // --- Common Utilities ---
+  mocked: (item) => item, // Helper TypeScript comune, identity function in JS
+  hoisted: () => { throw new Error("[Vitest Lite] vi.hoisted is not supported (requires bundler)."); },
 };
 
 // --- React Testing Utilities (Globali) ---
@@ -742,4 +815,35 @@ export function resetRunner() {
 }
 
 // Esportiamo act per l'uso nei test
-export { act };
+export { act }; 
+
+// --- Enhanced Exports with Modifiers (.skip, .only, etc.) ---
+
+const createTestInterface = (runnerMethod) => {
+  const fn = (name, cb) => runnerMethod.call(runner, name, cb);
+  
+  // .skip: Logga un warning e non esegue il test
+  fn.skip = (name, cb) => { console.warn(`[Vitest Lite] Skipped test: ${name}`); };
+  
+  // .concurrent: Esegue normalmente (alias)
+  fn.concurrent = (name, cb) => runnerMethod.call(runner, name, cb);
+  
+  // .only / .each: Stub con errore esplicito
+  fn.only = () => { throw new Error("[Vitest Lite] .only is not supported. Please run specific test files instead."); };
+  fn.each = () => { throw new Error("[Vitest Lite] .each is not supported. Please use a standard loop."); };
+  
+  return fn;
+};
+
+export const describe = createTestInterface(runner.describe);
+export const it = createTestInterface(runner.it);
+export const test = createTestInterface(runner.test);
+
+// Re-export standard utils
+export const expect = (value) => runner.expect(value);
+expect.any = (constructor) => new Any(constructor);
+expect.objectContaining = (sample) => new ObjectContaining(sample);
+export const beforeEach = (fn) => runner.beforeEach(fn);
+export const afterEach = (fn) => runner.afterEach(fn);
+export const beforeAll = (fn) => runner.beforeAll(fn);
+export const afterAll = (fn) => runner.afterAll(fn);
