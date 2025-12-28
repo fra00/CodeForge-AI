@@ -595,17 +595,6 @@ export class VitestCompatibleRunner {
   }
 }
 
-// Esponiamo le funzioni globalmente per essere usate dal codice dei test
-export const describe = (name, fn) => runner.describe(name, fn);
-export const it = (name, fn) => runner.it(name, fn);
-export const test = (name, fn) => runner.test(name, fn);
-export const expect = (value) => runner.expect(value);
-expect.any = (constructor) => new Any(constructor);
-expect.objectContaining = (sample) => new ObjectContaining(sample);
-export const beforeEach = (fn) => runner.beforeEach(fn);
-export const afterEach = (fn) => runner.afterEach(fn);
-export const beforeAll = (fn) => runner.beforeAll(fn);
-export const afterAll = (fn) => runner.afterAll(fn);
 export const vi = {
   fn: (implementation) => createMockFunction(implementation),
   spyOn: (obj, methodName) => {
