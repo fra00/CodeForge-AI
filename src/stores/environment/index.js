@@ -67,6 +67,14 @@ export const ENVIRONMENTS = {
   - Ensure Hooks (\`useState\`, \`useEffect\`) are only at the top level of components.
   - Check dependency arrays in \`useEffect\` for completeness.
 
+- **CRITICAL - NO EXTERNAL PACKAGES:**
+  - **DO NOT install or import external npm packages** (e.g., 'uuid', 'lodash', 'axios', 'classnames', 'moment').
+  - **USE NATIVE APIS:**
+    - For UUIDs: Use \`crypto.randomUUID()\` or \`Date.now().toString()\`.
+    - For Utilities: Write your own helper functions inside the file.
+    - For HTTP: Use \`fetch\`.
+  - **EXCEPTIONS:** You can import \`react\` and \`react-dom\`.
+
 - **STYLING:**
   - If requested to use **Tailwind CSS**: Add the CDN script \`<script src="https://cdn.tailwindcss.com"></script>\` to the \`<head>\` of \`index.html\`.
     `,

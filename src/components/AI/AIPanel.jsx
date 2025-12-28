@@ -50,6 +50,7 @@ export function AIPanel({
   const activeFile = useFileStore((state) => state.getActiveFile());
 
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null); // Ref per il contenitore scrollabile
   const apiKey = aiProvider === "claude" ? claudeApiKey : geminiApiKey; // Usa la chiave del provider selezionato
   const isGenerating = isStreaming; // Rinominato per chiarezza
 
@@ -58,10 +59,45 @@ export function AIPanel({
     loadConversations();
   }, [loadConversations]);
 
-  // Scrolla in basso ad ogni nuovo messaggio
+  // Scrolla in basso ad ogni nuovo messaggio con animazione rallentata
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]); // Dipende dalla lunghezza per evitare loop infiniti
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Calcola la posizione target (fondo)
+    const targetScrollTop = container.scrollHeight - container.clientHeight;
+
+    // Se siamo già vicini al fondo o non c'è nulla da scrollare, esci
+    if (targetScrollTop <= container.scrollTop + 5) return;
+
+    // Configurazione animazione
+    const duration = 1000; // 1 secondo per permettere la lettura
+    const startScrollTop = container.scrollTop;
+    const distance = targetScrollTop - startScrollTop;
+    let startTime = null;
+    let animationFrameId;
+
+    const animateScroll = (currentTime) => {
+      if (!startTime) startTime = currentTime;
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function: easeOutQuart per un rallentamento naturale alla fine
+      const ease = 1 - Math.pow(1 - progress, 4);
+
+      container.scrollTop = startScrollTop + distance * ease;
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animateScroll);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animateScroll);
+
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [messages.length]);
 
   const handleSendPrompt = (prompt) => {
     if (!activeFile) {
@@ -147,7 +183,7 @@ export function AIPanel({
          permettendo al figlio con overflow-y-auto di funzionare correttamente. */}
       <div className="flex flex-col flex-1 overflow-hidden" key={currentChatId}>
         {/* Area Messaggi */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
           {messages.length <= 2 && ( // Solo il system prompt e il messaggio iniziale
             <div className="p-4 text-editor-border text-center">
               Inizia una conversazione con l'AI Assistant.

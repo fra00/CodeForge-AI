@@ -1,3 +1,89 @@
+import { createRoot } from "react-dom/client";
+import React from "react";
+import { act } from "react-dom/test-utils";
+
+// Registro globale per tracciare tutti i mock creati e permettere operazioni bulk (restore, clear, reset)
+const globalMocks = new Set();
+
+// --- Fake Timers State & Logic ---
+const fakeTimers = {
+  enabled: false,
+  queue: [],
+  currentTime: 0,
+  originals: {
+    setTimeout: window.setTimeout,
+    clearTimeout: window.clearTimeout,
+    setInterval: window.setInterval,
+    clearInterval: window.clearInterval,
+    Date: window.Date,
+  }
+};
+
+function installFakeTimers() {
+  if (fakeTimers.enabled) return;
+  fakeTimers.enabled = true;
+  fakeTimers.currentTime = Date.now();
+  fakeTimers.queue = [];
+
+  window.setTimeout = (cb, delay = 0, ...args) => {
+    const id = Math.random();
+    fakeTimers.queue.push({
+      id,
+      cb,
+      time: fakeTimers.currentTime + delay,
+      args,
+      type: 'timeout'
+    });
+    fakeTimers.queue.sort((a, b) => a.time - b.time);
+    return id;
+  };
+
+  window.clearTimeout = (id) => {
+    fakeTimers.queue = fakeTimers.queue.filter(t => t.id !== id);
+  };
+
+  window.setInterval = (cb, delay = 0, ...args) => {
+    const id = Math.random();
+    const safeDelay = delay < 1 ? 1 : delay; // Prevent infinite loops
+    fakeTimers.queue.push({
+      id,
+      cb,
+      delay: safeDelay,
+      time: fakeTimers.currentTime + safeDelay,
+      args,
+      type: 'interval'
+    });
+    fakeTimers.queue.sort((a, b) => a.time - b.time);
+    return id;
+  };
+
+  window.clearInterval = (id) => {
+    fakeTimers.queue = fakeTimers.queue.filter(t => t.id !== id);
+  };
+
+  const OriginalDate = fakeTimers.originals.Date;
+  window.Date = class extends OriginalDate {
+    constructor(...args) {
+      if (args.length === 0) return new OriginalDate(fakeTimers.currentTime);
+      return new OriginalDate(...args);
+    }
+    static now() {
+      return fakeTimers.currentTime;
+    }
+  };
+}
+
+function useRealTimers() {
+  if (!fakeTimers.enabled) return;
+  window.setTimeout = fakeTimers.originals.setTimeout;
+  window.clearTimeout = fakeTimers.originals.clearTimeout;
+  window.setInterval = fakeTimers.originals.setInterval;
+  window.clearInterval = fakeTimers.originals.clearInterval;
+  window.Date = fakeTimers.originals.Date;
+  fakeTimers.enabled = false;
+  fakeTimers.queue = [];
+}
+
 /**
  * Implementazione di un mini-framework di test compatibile con la sintassi di Vitest,
  * progettato per essere eseguito interamente nel browser.
@@ -84,6 +170,9 @@ function createMockFunction(initialImplementation) {
     implementation = undefined;
     onceImplementations = [];
   };
+
+  // Registriamo il mock nel set globale
+  globalMocks.add(mockFn);
 
   return mockFn;
 }
@@ -480,7 +569,170 @@ export const vi = {
     
     return mockFn;
   },
+  /**
+   * Sostituisce una proprietà globale (es. window.crypto) con un valore mock.
+   * Utile per mockare API del browser che potrebbero essere read-only.
+   */
+  stubGlobal: (name, value) => {
+    Object.defineProperty(window, name, {
+      value: value,
+      writable: true,
+      configurable: true,
+    });
+  },
+  /**
+   * Ripristina l'implementazione originale di tutti i mock creati con spyOn.
+   */
+  restoreAllMocks: () => {
+    globalMocks.forEach((mock) => mock.mockRestore());
+  },
+  /**
+   * Pulisce la cronologia delle chiamate (calls, results) di tutti i mock.
+   * Non ripristina l'implementazione originale.
+   */
+  clearAllMocks: () => {
+    globalMocks.forEach((mock) => mock.mockClear());
+  },
+  /**
+   * Resetta completamente lo stato di tutti i mock (cronologia + implementazioni).
+   */
+  resetAllMocks: () => {
+    globalMocks.forEach((mock) => mock.mockReset());
+  },
+  
+  // --- Timer Mocks ---
+  useFakeTimers: () => installFakeTimers(),
+  useRealTimers: () => useRealTimers(),
+  
+  runOnlyPendingTimers: () => {
+    if (!fakeTimers.enabled) return;
+    // Esegue i task attualmente in coda (snapshot)
+    const tasks = [...fakeTimers.queue];
+    fakeTimers.queue = []; 
+    tasks.forEach(task => {
+      fakeTimers.currentTime = task.time;
+      try { task.cb(...(task.args || [])); } catch(e) { console.error(e); }
+      if (task.type === 'interval') {
+        fakeTimers.queue.push({ ...task, time: fakeTimers.currentTime + task.delay });
+      }
+    });
+    fakeTimers.queue.sort((a, b) => a.time - b.time);
+  },
+  
+  advanceTimersByTime: (ms) => {
+    if (!fakeTimers.enabled) return;
+    const targetTime = fakeTimers.currentTime + ms;
+    let limit = 10000; // Safety break
+    while (fakeTimers.queue.length > 0 && fakeTimers.queue[0].time <= targetTime && limit-- > 0) {
+      const task = fakeTimers.queue.shift();
+      fakeTimers.currentTime = task.time;
+      try { task.cb(...(task.args || [])); } catch(e) { console.error(e); }
+      if (task.type === 'interval') {
+        const nextTask = { ...task, time: task.time + task.delay };
+        // Inserimento ordinato
+        let inserted = false;
+        for(let i=0; i<fakeTimers.queue.length; i++) {
+            if (fakeTimers.queue[i].time > nextTask.time) {
+                fakeTimers.queue.splice(i, 0, nextTask);
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) fakeTimers.queue.push(nextTask);
+      }
+    }
+    fakeTimers.currentTime = targetTime;
+  },
+  
+  runAllTimers: () => {
+    if (!fakeTimers.enabled) return;
+    let limit = 1000;
+    while (fakeTimers.queue.length > 0 && limit-- > 0) {
+       const task = fakeTimers.queue.shift();
+       fakeTimers.currentTime = task.time;
+       try { task.cb(...(task.args || [])); } catch(e) { console.error(e); }
+       if (task.type === 'interval') {
+         const nextTask = { ...task, time: task.time + task.delay };
+         let inserted = false;
+         for(let i=0; i<fakeTimers.queue.length; i++) {
+             if (fakeTimers.queue[i].time > nextTask.time) {
+                 fakeTimers.queue.splice(i, 0, nextTask);
+                 inserted = true;
+                 break;
+             }
+         }
+         if (!inserted) fakeTimers.queue.push(nextTask);
+       }
+    }
+  }
 };
+
+// --- React Testing Utilities (Globali) ---
+
+let currentRoot = null;
+let currentContainer = null;
+
+export function cleanup() {
+  if (currentRoot) {
+    act(() => currentRoot.unmount());
+    currentRoot = null;
+  }
+  if (currentContainer) {
+    currentContainer.remove();
+    currentContainer = null;
+  }
+  // Ripristina i timer reali se erano stati mockati
+  useRealTimers();
+  // Puliamo anche il localStorage per evitare che i test si influenzino a vicenda
+  // o che lo stato persista tra le esecuzioni (se il runner viene riutilizzato).
+  try {
+    window.localStorage.clear();
+  } catch (e) {}
+}
+
+/**
+ * Utility per testare custom hooks senza usare JSX.
+ * Esempio: const { result } = renderHook(() => useMyHook());
+ */
+export function renderHook(hookFn, options = {}) {
+  // Assicura che l'ambiente sia pulito prima di un nuovo render
+  cleanup();
+
+  const result = { current: null };
+  const { wrapper: Wrapper } = options;
+
+  function TestComponent() {
+    const hookResult = hookFn();
+    result.current = hookResult;
+    return null;
+  }
+
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  currentContainer = container;
+  currentRoot = createRoot(container);
+
+  // Se c'è un wrapper, avvolgiamo il TestComponent
+  const component = Wrapper
+    ? React.createElement(Wrapper, null, React.createElement(TestComponent))
+    : React.createElement(TestComponent);
+
+  act(() => {
+    currentRoot.render(component);
+  });
+
+  return {
+    result,
+    rerender: () => {
+      act(() => {
+        currentRoot.render(component);
+      });
+    },
+    unmount: () => {
+      cleanup();
+    },
+  };
+}
 
 // Istanza globale del runner
 export let runner = new VitestCompatibleRunner();
@@ -488,3 +740,6 @@ export let runner = new VitestCompatibleRunner();
 export function resetRunner() {
   runner = new VitestCompatibleRunner();
 }
+
+// Esportiamo act per l'uso nei test
+export { act };
