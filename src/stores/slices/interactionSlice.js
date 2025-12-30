@@ -165,56 +165,92 @@ export const createInteractionSlice = (set, get) => ({
 
         messagesForLLM.push(...recentHistory);
 
-        const response = await getChatCompletion({
-          provider,
-          apiKey,
-          modelName,
-          messages: messagesForLLM,
-          stream: false,
-          responseSchema,
-          signal: controller.signal,
-          maxTokens: 8192,
-        });
+        // --- ROBUST AUTO-CONTINUE STRATEGY ---
+        let fullRawText = "";
+        let isTruncated = false;
+        let continueCount = 0;
+        const MAX_CONTINUES = 5; // Circuit breaker
 
-        if (response.truncated || response.stop_reason === "max_tokens") {
-          addMessage({
-            id: Date.now().toString(),
-            role: "status",
-            content: "⚠️ Risposta troncata (limite token).",
+        do {
+          const response = await getChatCompletion({
+            provider,
+            apiKey,
+            modelName,
+            messages: messagesForLLM,
+            stream: false,
+            responseSchema,
+            signal: controller.signal,
+            maxTokens: 8192,
           });
-          set({ isStreaming: false });
-          await get().saveConversation();
-          return;
-        }
 
-        let rawText;
-        // Gestisce la risposta del client Gemini: { text: '...' }
-        if (response.text) {
-          rawText = response.text;
-          // Gestisce la risposta del client Claude: { content: [{ type: 'text', text: '...' }] }
-        } else if (
-          Array.isArray(response.content) &&
-          response.content[0]?.type === "text"
-        ) {
-          rawText = response.content[0].text;
-        } else {
-          console.warn(
-            "Unrecognized AI response structure. Stringifying.",
-            response
-          );
-          rawText = JSON.stringify(response, null, 2);
-        }
+          let rawChunk = "";
+          // Robust text extraction
+          if (response.text) {
+            rawChunk = response.text;
+          } else if (
+            Array.isArray(response.content) &&
+            response.content[0]?.type === "text"
+          ) {
+            rawChunk = response.content[0].text;
+          } else {
+            rawChunk = JSON.stringify(response, null, 2);
+          }
 
-        const jsonObject = parseMultiPartResponse(rawText);
+          isTruncated =
+            response.truncated || response.stop_reason === "max_tokens";
+
+          if (isTruncated) {
+            if (continueCount >= MAX_CONTINUES) {
+              addMessage({
+                id: Date.now().toString(),
+                role: "status",
+                content:
+                  "⚠️ Max continuation limit reached. File is too large.",
+              });
+              fullRawText += rawChunk; // Append what we have
+              break;
+            }
+
+            // 1. SAFE POINT TRIMMING
+            // Find the last newline to ensure we don't cut in the middle of a token/syntax
+            const lastNewlineIndex = rawChunk.lastIndexOf("\n");
+            let safeChunk = rawChunk;
+            
+            // Only trim if we found a newline and it's not the very end
+            if (lastNewlineIndex > 0 && lastNewlineIndex < rawChunk.length - 1) {
+               safeChunk = rawChunk.substring(0, lastNewlineIndex + 1);
+            }
+            
+            fullRawText += safeChunk;
+
+            // 2. CONTEXT TAIL INJECTION
+            // Don't inject the whole file, just the tail to give context
+            const TAIL_SIZE = 2000;
+            const tail = safeChunk.slice(-TAIL_SIZE);
+
+            messagesForLLM.push({ role: "assistant", content: tail });
+            messagesForLLM.push({ 
+              role: "user", 
+              content: "The previous assistant message ends EXACTLY with the text above.\nContinue writing from the NEXT character.\nDO NOT repeat any existing text.\nDO NOT restart or summarize.\nDO NOT modify previous content." 
+            });
+
+            continueCount++;
+          } else {
+            // Not truncated, append everything
+            fullRawText += rawChunk;
+          }
+        } while (isTruncated);
+
+        const jsonObject = parseMultiPartResponse(fullRawText);
 
         if (!jsonObject) {
-          console.error("Failed to parse AI response.", rawText);
+          console.error("Failed to parse AI response.", fullRawText);
           addMessage({
             id: Date.now().toString(),
             role: "status",
             content:
               "⚠️ Error: Could not parse the response structure. Raw response:\n" +
-              rawText,
+              fullRawText,
           });
           break;
         }

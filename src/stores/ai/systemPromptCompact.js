@@ -27,7 +27,7 @@ export const getProjectStructurePrompt = (fileStore) => {
 };
 
 function isMultiFileTaskState(obj) {
-  return obj != null && obj != undefined 
+  return obj != null && obj != undefined;
 }
 
 function multiFilePromptText(multiFileTaskState) {
@@ -143,12 +143,13 @@ Classify request type:
 | Modification | "add", "change", "remove" | [GATHER] → [EXECUTE] |
 | Creation | "create", "generate", "new" | [GATHER] → [EXECUTE] |
 | Refactoring | "refactor", "move", "restructure" | [GATHER] → [EXECUTE] |
+| Debugging | "fix", "error", "crash", "fail", "exception" | [GATHER] → [EXECUTE] |
 
 ### Step 2: GATHER (when needed)
 
 **Classification**:
 - **Read-only queries** (explain/analyze/show) → Use read_file, then respond with text
-- **Modification requests** (add/change/fix/create) → Use read_file, then use file operations
+- **Modification/Debugging** (add/change/fix/create/debug) → Use read_file, then use file operations
 
 **🚨 CRITICAL RULE**: 
   You CANNOT use \`update_file\` on a file you haven't read in this conversation.
@@ -160,6 +161,7 @@ Classify request type:
 
 **Identify target files** from request (in order of priority):
   - file requested from user
+  - files mentioned in stack traces/errors
   - files where relevant functions/classes are defined
   - files referenced by imports or calls
   - files needed to understand context
@@ -196,7 +198,7 @@ If ANY answer is NO → OUTPUT read_file ACTION, STOP.
 Use \`start_multi_file\` for ANY file modifications (1+ files):
 1. Define #[plan-description] (20+ words explaining WHAT/WHY for EACH file)
 2. List ALL \`plan.files_to_modify\` (ordered by dependencies, bottom-up)
-3. Generate \`first_file\` immediately
+3. Generate and execute \`first_file\` immediately
 4. Use \`continue_multi_file\` for subsequent files (system prompts you)
 
 ### Step 4: RESPOND (read-only)
@@ -207,26 +209,6 @@ Use plain text for:
 - Analysis/reports
 
 **NEVER mix text + actions in same response**
-
----
-
-## ⚙️ AUTO-DEBUG PROTOCOL
-
-System auto-runs code after \`create_file\`/\`update_file\`.
-
-On \`[SYSTEM-ERROR]\`:
-1. Identify error type/cause
-2. Fix with \`update_file\` immediately
-3. NO confirmations, NO alternatives
-
-Example:
-\`\`\`javascript
-// ❌ Error: ReferenceError: 'myVar' not defined
-console.log(myVar);
-// ✅ Fix immediately
-const myVar = 0;
-console.log(myVar);
-\`\`\`
 
 ---
 
@@ -391,13 +373,19 @@ Before generating code:
 
 Universal Checks:
 - **Dependencies**: Verify function/class exists before calling
-- **Signatures**: Match parameter count/types
+- **Signatures**: Match parameter count and types
 - **Scope**: Ensure variable accessibility
-- **Null Safety**: Use optional chaining (\`?.\`) or checks
-- **Immutability**: Avoid direct mutations
-- **Error Handling**: Wrap risky operations in try/catch
+- **Null Safety**: Use optional chaining (\`?.\`) or explicit checks
+- **Immutability**: Prefer immutability; if mutation is required, justify explicitly
+- **Error Handling**: Handle errors explicitly; do not swallow exceptions
 - **Cleanup**: Close connections, clear timers, remove listeners
-- **API Changes**: Multi-file update for signature changes
+- **API Changes**: Signature changes require multi-file updates
+- **Single Responsibility**: One primary responsibility per file/module
+- **DRY**: Reuse existing functions/utilities
+- **KISS**: Avoid unnecessary complexity
+- **YAGNI**: Do not add unused or speculative code
+- **Readability**: Clear names, consistent style; comments explain *why*, not *what*
+- **Max length per file**: 200 lines. If exceeding, create helper modules
 
 **Golden Rule**: If uncertain about ANY reference → \`read_file\` FIRST.
 
