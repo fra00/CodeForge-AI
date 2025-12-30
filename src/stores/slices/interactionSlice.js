@@ -176,7 +176,7 @@ export const createInteractionSlice = (set, get) => ({
           maxTokens: 8192,
         });
 
-        if (response.truncated) {
+        if (response.truncated || response.stop_reason === "max_tokens") {
           addMessage({
             id: Date.now().toString(),
             role: "status",
@@ -188,16 +188,21 @@ export const createInteractionSlice = (set, get) => ({
         }
 
         let rawText;
-        if (typeof response === "string") {
-          rawText = response;
-        } else if (response.text) {
+        // Gestisce la risposta del client Gemini: { text: '...' }
+        if (response.text) {
           rawText = response.text;
-        } else if (response.content) {
-          rawText = response.content;
-        } else if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
-          rawText = response.candidates[0].content.parts[0].text;
+          // Gestisce la risposta del client Claude: { content: [{ type: 'text', text: '...' }] }
+        } else if (
+          Array.isArray(response.content) &&
+          response.content[0]?.type === "text"
+        ) {
+          rawText = response.content[0].text;
         } else {
-          rawText = JSON.stringify(response);
+          console.warn(
+            "Unrecognized AI response structure. Stringifying.",
+            response
+          );
+          rawText = JSON.stringify(response, null, 2);
         }
 
         const jsonObject = parseMultiPartResponse(rawText);
@@ -211,7 +216,7 @@ export const createInteractionSlice = (set, get) => ({
               "⚠️ Error: Could not parse the response structure. Raw response:\n" +
               rawText,
           });
-          continue;
+          break;
         }
 
         console.log("Parsed AI Response JSON:", jsonObject);
@@ -232,7 +237,7 @@ export const createInteractionSlice = (set, get) => ({
             role: "user",
             content: `[SYSTEM-ERROR] Your response does not conform to the required JSON schema. Please correct it. Errors:\n${validationErrors}`,
           });
-          continue;
+          break;
         }
 
         toolCallCount++;
@@ -350,11 +355,19 @@ The final output should be ONLY the generated markdown prompt, ready to be used.
         maxTokens: 4096,
       });
 
-      const extendedPrompt =
-        response?.text ||
-        response?.content ||
-        response?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        "";
+      let extendedPrompt = "";
+      if (response.text) {
+        extendedPrompt = response.text;
+      } else if (
+        Array.isArray(response.content) &&
+        response.content[0]?.type === "text"
+      ) {
+        extendedPrompt = response.content[0].text;
+      } else if (response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        extendedPrompt = response.candidates[0].content.parts[0].text;
+      } else {
+        extendedPrompt = typeof response === "string" ? response : "";
+      }
 
       return extendedPrompt.trim();
     } catch (error) {

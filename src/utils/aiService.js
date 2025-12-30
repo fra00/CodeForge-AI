@@ -42,12 +42,24 @@ export async function getChatCompletion({
 }) {
   try {
     if (provider === "claude") {
+      // Anthropic non accetta messaggi con role: 'system' nell'array messages.
+      // Estraiamo il system prompt e lo passiamo separatamente.
+      let systemPrompt = undefined;
+      const cleanMessages = messages.filter((m) => {
+        if (m.role === "system") {
+          systemPrompt = m.content;
+          return false;
+        }
+        return true;
+      });
+
       return await claudeClient.getChatCompletion({
-        messages,
+        messages: cleanMessages,
         apiKey,
         modelName,
         stream,
         onChunk,
+        system: systemPrompt,
         signal, // Passato al client Claude
       });
     }

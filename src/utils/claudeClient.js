@@ -17,12 +17,13 @@ export async function testAPIKey(apiKey, modelName = DEFAULT_MODEL_NAME) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": apiKey.trim(),
         "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
-        model: DEFAULT_MODEL_NAME,
-        max_tokens: 1,
+        model: modelName || DEFAULT_MODEL_NAME,
+        max_tokens: 5,
         messages: [{ role: "user", content: "test" }],
       }),
     });
@@ -31,6 +32,13 @@ export async function testAPIKey(apiKey, modelName = DEFAULT_MODEL_NAME) {
     if (response.status === 401) {
       return false;
     }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Anthropic API Test Failed:", response.status, errorText);
+      return false;
+    }
+
     // Qualsiasi altro codice 4xx/5xx è un errore, ma 200 è successo
     return response.ok;
   } catch (error) {
@@ -57,6 +65,7 @@ export async function getChatCompletion({
   stream = false,
   onChunk = () => {},
   responseSchema,
+  system,
   signal,
 }) {
   if (!apiKey) {
@@ -65,8 +74,9 @@ export async function getChatCompletion({
 
   const headers = {
     "Content-Type": "application/json",
-    "x-api-key": apiKey,
+    "x-api-key": apiKey.trim(),
     "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
   };
 
   const body = {
@@ -74,9 +84,9 @@ export async function getChatCompletion({
     max_tokens: 4096,
     messages: messages,
     stream: stream,
-    ...(responseSchema && {
-      response_format: { type: "json", schema: responseSchema },
-    }),
+    system: system,
+    // Anthropic non supporta 'response_format' come OpenAI.
+    // Ci affidiamo al system prompt per la struttura JSON.
   };
 
   try {

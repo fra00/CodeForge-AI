@@ -33,13 +33,13 @@ export async function testAPIKey(apiKey, modelName = DEFAULT_MODEL_NAME) {
       model: modelName,
       contents: [{ role: "user", parts: [{ text: "test" }] }],
       config: {
-        maxOutputTokens: 1,
+        maxOutputTokens: 5,
       },
     });
 
     // Se la risposta è OK e non ci sono errori, la chiave è valida.
     // La libreria gestisce gli errori di autenticazione lanciando un'eccezione.
-    return !!response.text;
+    return true;
   } catch (error) {
     console.error("Gemini API key test failed:", error);
     return false;
