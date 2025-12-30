@@ -237,7 +237,6 @@ export const createInteractionSlice = (set, get) => ({
             role: "user",
             content: `[SYSTEM-ERROR] Your response does not conform to the required JSON schema. Please correct it. Errors:\n${validationErrors}`,
           });
-          break;
         }
 
         toolCallCount++;

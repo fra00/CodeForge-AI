@@ -26,6 +26,81 @@ export const getProjectStructurePrompt = (fileStore) => {
   return `\n# 📁 PROJECT STRUCTURE\n${filePathsWithTags.join("\n")}\n`;
 };
 
+function isMultiFileTaskState(obj) {
+  return obj != null && obj != undefined 
+}
+
+function multiFilePromptText(multiFileTaskState) {
+  let promptText = "";
+  // Multi-File State Injection
+  if (multiFileTaskState) {
+    promptText = `
+---
+**continue_multi_file**: Next file in sequence
+- Use ONLY when "MULTI-FILE TASK IN PROGRESS" section exists
+- System will prompt for each file
+- After last file: \`{"action":"noop","file":{"path":""},"is_last_file":true}\`
+
+
+### ⚠️ MULTI-FILE TASK IN PROGRESS
+
+| Element | Value |
+|---------|-------|
+| Plan | ${multiFileTaskState.plan} |
+| Progress | ${multiFileTaskState.completedFiles.length}/${
+      multiFileTaskState.completedFiles.length +
+      multiFileTaskState.remainingFiles.length
+    } |
+| Next File | \`${multiFileTaskState.remainingFiles[0]}\` |
+
+---
+
+### 🚨 REQUIRED ACTION
+
+**Your next response MUST be:**
+
+**If more files remain:**
+#[json-data]
+{"action":"continue_multi_file","next_file":{"action":"[create_file|update_file]","file":{"path":"${
+      multiFileTaskState.remainingFiles[0]
+    }"}}}
+#[end-json-data]
+#[file-message]
+Processing file ${multiFileTaskState.completedFiles.length + 1}/${
+      multiFileTaskState.completedFiles.length +
+      multiFileTaskState.remainingFiles.length
+    }.
+#[end-file-message]
+#[content-file]
+// Complete code for ${multiFileTaskState.remainingFiles[0]}
+#[end-content-file]
+
+**If this is LAST file:**
+#[json-data]
+{"action":"continue_multi_file","next_file":{"action":"noop","file":{"path":""},"is_last_file":true}}
+#[end-json-data]
+#[file-message]
+Task completed. All files processed.
+#[end-file-message]
+
+**Remaining after this:** ${
+      multiFileTaskState.remainingFiles.slice(1).join(", ") ||
+      "None (task complete)"
+    }
+
+### ❌ DO NOT:
+- Use plain text instead of JSON actions
+- Stop for confirmation
+- Skip files
+- Change plan order
+- Use "file" property at top level (use "next_file" only)
+
+**Generate complete code for current file and send immediately.**
+`;
+  }
+  return promptText;
+}
+
 /**
  * Builds dynamic system prompt with reinforced rules
  */
@@ -75,20 +150,31 @@ Classify request type:
 - **Read-only queries** (explain/analyze/show) → Use read_file, then respond with text
 - **Modification requests** (add/change/fix/create) → Use read_file, then use file operations
 
-**🚨 CRITICAL RULE**: You CANNOT use \`update_file\` on a file you haven't read in this conversation.
+**🚨 CRITICAL RULE**: 
+  You CANNOT use \`update_file\` on a file you haven't read in this conversation.
+  You CANNOT use \`create_file\` if file exists.
+
+** Where do you find files to read? (in order of priority) **
+  - Use project structure in system prompt "PROJECT STRUCTURE"
+  - list_files tool if needed
+
+**Identify target files** from request (in order of priority):
+  - file requested from user
+  - files where relevant functions/classes are defined
+  - files referenced by imports or calls
+  - files needed to understand context
 
 **Workflow for modifications**:
-1. **Identify target files** from request
-2. **ALWAYS read first**: Use \`tool_call\` → \`read_file\` with \`paths: ["file1.js", "file2.js"]\`
-3. **Wait for system response** with file contents
-4. **Then modify**: Use \`start_multi_file\` based on actual content
+1. **ALWAYS read first**: Use \`tool_call\` → \`read_file\` with \`paths: ["file1.js", "file2.js"]\`
+2. **Wait for system response** with file contents
+3. **Then modify**: Use \`start_multi_file\` based on actual content
 
 **Workflow for analysis** (no modifications):
-1. **Identify target files** from request
-2. Use \`read_file\` to get contents
-3. **Respond with plain text** explaining findings
+1. Use \`read_file\` to get contents (batch if 2+ files)
+2. **Respond with plain text** explaining findings
 
 **Self-check before ANY update_file**:
+- [ ] Have I read the definitions of external functions called in this code? (Prevent logic overwrite)
 - [ ] Did I receive the content of this file from system?
 - [ ] Do I know the exact current state of functions/imports?
 - [ ] Am I modifying based on actual code, not assumptions?
@@ -258,9 +344,6 @@ Example:
 
 ### 3. Multi-File Workflow
 
-
-**🚨 CRITICAL RULE**: You CANNOT use \`start_multi_file\` with a file you haven't read in this conversation.
-
 **start_multi_file**: Begin multi-file task
 
 Required fields:
@@ -274,7 +357,7 @@ Required fields:
 Every file in plan description MUST be in \`files_to_modify\` array.
 \`\`\`javascript
 // ✅ VALID
-plan-description: "Modify Auth.js (add login) and App.jsx (import Auth)"
+plan-description: "Add Auth.js (add login) and Modfy App.jsx (import Auth)"
 files_to_modify: ["Auth.js", "App.jsx"]
 
 // ❌ INVALID
@@ -282,10 +365,8 @@ plan-description: "Modify Auth.js, App.jsx, Login.jsx..."
 files_to_modify: ["Auth.js", "App.jsx"] // Login.jsx missing!
 \`\`\`
 
-**continue_multi_file**: Next file in sequence
-- Use ONLY when "MULTI-FILE TASK IN PROGRESS" section exists
-- System will prompt for each file
-- After last file: \`{"action":"noop","file":{"path":""},"is_last_file":true}\`
+
+${multiFilePromptText(multiFileTaskState)}
 
 ### 4. Test Runner
 
@@ -305,6 +386,7 @@ Before generating code:
 3. **Breaking Changes**: Update ALL callers via multi-file
 4. **🚨 SURGICAL ONLY**: Modify ONLY requested code. Preserve ALL else unchanged (functions, imports, logic). Never simplify unrequested code.
 5. **NO STYLE CHANGES**: Do not reformat, reorder, or rename existing code. Copy untouched parts VERBATIM. Do not "clean up" code unless explicitly requested.
+6. **NO LOGIC REINVENTION**: Do not replace existing logic it's can cause regression error. If you don't know or don't understand a function call, \`read_file\` its definition first.
 
 
 Universal Checks:
@@ -449,67 +531,6 @@ Before outputting code:
 8. **Read = Write Permission** - No \`read_file\` in conversation = No \`update_file\` allowed
 9. **Verify first** - Run pre-send checklist ALWAYS
 `;
-
-  // Multi-File State Injection
-  if (multiFileTaskState) {
-    prompt += `
----
-### ⚠️ MULTI-FILE TASK IN PROGRESS
-
-| Element | Value |
-|---------|-------|
-| Plan | ${multiFileTaskState.plan} |
-| Progress | ${multiFileTaskState.completedFiles.length}/${
-      multiFileTaskState.completedFiles.length +
-      multiFileTaskState.remainingFiles.length
-    } |
-| Next File | \`${multiFileTaskState.remainingFiles[0]}\` |
-
----
-
-### 🚨 REQUIRED ACTION
-
-**Your next response MUST be:**
-
-**If more files remain:**
-#[json-data]
-{"action":"continue_multi_file","next_file":{"action":"[create_file|update_file]","file":{"path":"${
-      multiFileTaskState.remainingFiles[0]
-    }"}}}
-#[end-json-data]
-#[file-message]
-Processing file ${multiFileTaskState.completedFiles.length + 1}/${
-      multiFileTaskState.completedFiles.length +
-      multiFileTaskState.remainingFiles.length
-    }.
-#[end-file-message]
-#[content-file]
-// Complete code for ${multiFileTaskState.remainingFiles[0]}
-#[end-content-file]
-
-**If this is LAST file:**
-#[json-data]
-{"action":"continue_multi_file","next_file":{"action":"noop","file":{"path":""},"is_last_file":true}}
-#[end-json-data]
-#[file-message]
-Task completed. All files processed.
-#[end-file-message]
-
-**Remaining after this:** ${
-      multiFileTaskState.remainingFiles.slice(1).join(", ") ||
-      "None (task complete)"
-    }
-
-### ❌ DO NOT:
-- Use plain text instead of JSON actions
-- Stop for confirmation
-- Skip files
-- Change plan order
-- Use "file" property at top level (use "next_file" only)
-
-**Generate complete code for current file and send immediately.**
-`;
-  }
 
   return prompt;
 };

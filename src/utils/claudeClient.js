@@ -67,6 +67,7 @@ export async function getChatCompletion({
   responseSchema,
   system,
   signal,
+  maxTokens = 4096, // Default fallback
 }) {
   if (!apiKey) {
     throw new Error("Anthropic API key is not set in settings.");
@@ -81,7 +82,7 @@ export async function getChatCompletion({
 
   const body = {
     model: modelName,
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     messages: messages,
     stream: stream,
     system: system,
