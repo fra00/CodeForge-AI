@@ -1,5 +1,7 @@
 import { getAll, put, remove } from "../../utils/indexedDB";
 import { SYSTEM_PROMPT } from "../ai/systemPrompt";
+import { useFileStore } from "../useFileStore";
+import { normalizePath } from "../logic/aiLoopLogic";
 
 const CONVERSATIONS_STORE_NAME = "aiConversations";
 
@@ -106,13 +108,80 @@ export const createChatSlice = (set, get) => ({
   },
 
   newChat: () => {
-    const newChat = createNewChat();
+    const newChatObj = createNewChat();
+
+    // --- VFS CACHE HYDRATION ---
+    // Quando si crea una nuova chat, proviamo a pre-popolarla con la conoscenza
+    // e i tag salvati nella cache del progetto (.llmContext/cache).
+    try {
+      const fileStore = useFileStore.getState();
+
+      // 1. Knowledge Summary
+      const knowledgePath = ".llmContext/cache/knowledge.md";
+      const knowledgeFile = Object.values(fileStore.files || {}).find(
+        (f) => normalizePath(f.path) === normalizePath(knowledgePath)
+      );
+
+      if (knowledgeFile && knowledgeFile.content) {
+        newChatObj.knowledgeSummary = knowledgeFile.content;
+        console.log("[Chat] New chat initialized with VFS knowledge cache");
+        // Feedback visivo nella chat
+        newChatObj.messages.push({
+          id: `knowledge-loaded-${Date.now()}`,
+          role: "status",
+          content: "🧠 Project Knowledge & Context loaded from cache.",
+        });
+      }
+
+      // 2. Tags (Global Project State)
+      const tagsPath = ".llmContext/cache/tags.json";
+      const tagsFile = Object.values(fileStore.files || {}).find(
+        (f) => normalizePath(f.path) === normalizePath(tagsPath)
+      );
+
+      if (tagsFile && tagsFile.content) {
+        try {
+          const tagsMap = JSON.parse(tagsFile.content);
+          let updatedCount = 0;
+          Object.entries(tagsMap).forEach(([filePath, tags]) => {
+            const targetFile = Object.values(fileStore.files).find(
+              (f) => normalizePath(f.path) === normalizePath(filePath)
+            );
+            if (targetFile && fileStore.updateFileContent) {
+              fileStore.updateFileContent(targetFile.id, undefined, tags);
+              updatedCount++;
+            }
+          });
+
+          const totalTagsFound = Object.keys(tagsMap).length;
+          if (totalTagsFound > 0) {
+            console.log(
+              `[Chat] Hydrated tags from VFS cache (New Chat). Found: ${totalTagsFound}, Applied: ${updatedCount}`
+            );
+            // Feedback visivo per i tag
+            newChatObj.messages.push({
+              id: `tags-loaded-${Date.now()}`,
+              role: "status",
+              content: `🏷️ Restored semantic tags for ${totalTagsFound} files.`,
+            });
+          }
+        } catch (err) {
+          console.warn("[Chat] Failed to parse tags.json:", err);
+        }
+      }
+    } catch (e) {
+      console.warn("[Chat] Failed to hydrate new chat from VFS:", e);
+    }
+
     get().clearContextFiles();
     set((state) => ({
-      conversations: [...state.conversations, newChat],
-      currentChatId: newChat.id,
+      conversations: [...state.conversations, newChatObj],
+      currentChatId: newChatObj.id,
       error: null,
     }));
+
+    // Salviamo subito la nuova chat per persistere il knowledge summary
+    get().saveConversation(newChatObj.id);
   },
 
   selectChat: (chatId) => {

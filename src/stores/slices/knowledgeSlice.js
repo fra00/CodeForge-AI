@@ -1,5 +1,6 @@
 import { KnowledgeService } from "../../services/knowledgeService";
-import { getValidMessages } from "../logic/aiLoopLogic";
+import { getValidMessages, normalizePath } from "../logic/aiLoopLogic";
+import { useFileStore } from "../useFileStore";
 
 export const createKnowledgeSlice = (set, get) => ({
   updateChatKnowledge: async (chatId) => {
@@ -73,6 +74,57 @@ export const createKnowledgeSlice = (set, get) => ({
 
       // Importante: Persistiamo immediatamente le modifiche (sommario e marker) nel DB
       await get().saveConversation(chatId);
+
+      // --- VFS PERSISTENCE (CACHE) ---
+      // Salviamo il knowledge e i tag nel VFS per rendere il progetto portabile (zip)
+      try {
+        const fileStore = useFileStore.getState();
+
+        // 1. Save Knowledge Summary (.md)
+        const knowledgePath = ".llmContext/cache/knowledge.md";
+
+        if (fileStore.applyFileActions) {
+          const knowledgeExists = Object.values(fileStore.files).some(
+            (f) => normalizePath(f.path) === normalizePath(knowledgePath)
+          );
+          const kAction = knowledgeExists ? "update_file" : "create_file";
+
+          fileStore.applyFileActions(
+            kAction,
+            {
+              path: knowledgePath,
+              content: newSummary,
+            },
+            { primary: ["system"] }
+          );
+
+          // 2. Save Tags (.json)
+          const tagsPath = ".llmContext/cache/tags.json";
+          const tagsExists = Object.values(fileStore.files).some(
+            (f) => normalizePath(f.path) === normalizePath(tagsPath)
+          );
+          const tAction = tagsExists ? "update_file" : "create_file";
+
+          const allFiles = fileStore.files;
+          const tagsMap = {};
+          Object.values(allFiles).forEach((f) => {
+            if (f.tags && Object.keys(f.tags).length > 0) {
+              tagsMap[f.path] = f.tags;
+            }
+          });
+
+          fileStore.applyFileActions(
+            tAction,
+            {
+              path: tagsPath,
+              content: JSON.stringify(tagsMap, null, 2),
+            },
+            { primary: ["system"] }
+          );
+        }
+      } catch (vfsError) {
+        console.warn("[Knowledge] Failed to persist to VFS:", vfsError);
+      }
     } catch (error) {
       console.error("Failed to update chat knowledge:", error);
       set((s) => ({

@@ -734,9 +734,11 @@ export const useFileStore = create((set, get) => ({
     if (!file || file.isFolder) return;
 
     set((state) => {
+      const currentFile = state.files[id];
       const updatedFile = {
-        ...state.files[id],
-        content: newContent,
+        ...currentFile,
+        // Se newContent è undefined, mantieni il contenuto attuale
+        content: newContent !== undefined ? newContent : currentFile.content,
         isDirty: true,
       };
 
