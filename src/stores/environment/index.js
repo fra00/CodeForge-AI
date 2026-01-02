@@ -97,6 +97,9 @@ export const ENVIRONMENTS = {
 - Remember that memory (SRAM) and storage (Flash) are extremely limited. Write efficient code.
 - Use 'Serial.println()' for debugging.
 - Common libraries include Wire.h, SPI.h, etc.
+- **IMPORTS:**
+  - Use angle brackets \`<Lib.h>\` for system libraries (installed libraries).
+  - Use quotes \`"file.h"\` for local files located in the root folder.
     `,
   },
   esp32: {
