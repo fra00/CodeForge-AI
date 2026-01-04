@@ -4,6 +4,7 @@ import {
   buildSystemPrompt,
   getProjectStructurePrompt,
 } from "../ai/systemPromptCompact";
+import { getRouterPrompt } from "../ai/prompts/intent";
 import { getResponseSchema } from "../ai/responseSchema";
 import { FRAMEWORK_2WHAV_PROMPT } from "../ai/2whavPrompt";
 import { useFileStore } from "../useFileStore";
@@ -93,6 +94,55 @@ export const createInteractionSlice = (set, get) => ({
         abortController: controller,
       });
       const responseSchema = getResponseSchema();
+
+      // --- 0. INTENT CLASSIFICATION (ROUTER LAYER) ---
+      // Facciamo una chiamata leggera per capire se serve l'Executor o basta una risposta chat.
+      // Saltiamo questo step se c'è un task multi-file in corso (l'utente potrebbe dare feedback sul task).
+      const isMultiFileInProgress = get().multiFileTaskState != null;
+
+      if (!isMultiFileInProgress && userMessage && userMessage.trim()) {
+        try {
+          const routerPrompt = getRouterPrompt(userMessage);
+          // Usiamo una chiamata non-streaming per il router
+          const routerResponse = await getChatCompletion({
+            provider,
+            apiKey,
+            modelName, // Nota: Si potrebbe usare un modello "Flash" qui se disponibile nelle settings
+            messages: [{ role: "user", content: routerPrompt }],
+            stream: false,
+            maxTokens: 8192, // Risposta breve
+            responseSchema: null, // Schema libero
+          });
+
+          let routerResult = null;
+          try {
+            // Tentativo di parsing JSON dalla risposta del router
+            const text = routerResponse.text || (routerResponse.content && routerResponse.content[0]?.text) || "";
+            // Pulizia base per JSON (rimuove markdown ```json ... ``` se presente)
+            const cleanJson = text.replace(/```json|```/g, "").trim();
+            routerResult = JSON.parse(cleanJson);
+          } catch (e) {
+            console.warn("[Router] Failed to parse router response, defaulting to project intent.", e);
+          }
+
+          // Se l'intento è "general", rispondiamo subito e chiudiamo.
+          if (routerResult && routerResult.intent === "general" && routerResult.reply) {
+            addMessage({
+              id: Date.now().toString(),
+              role: "assistant",
+              content: routerResult.reply,
+            });
+            set({ isStreaming: false, abortController: null });
+            await get().saveConversation();
+            return; // STOP HERE - Non attivare l'Executor
+          }
+
+          // Se l'intento è "project" o il parsing fallisce, proseguiamo con il flusso standard.
+        } catch (routerError) {
+          console.error("[Router] Error during classification:", routerError);
+          // In caso di errore del router, proseguiamo col flusso standard per sicurezza
+        }
+      }
 
       const startFilePath = context.currentFile;
       stoppingObject.isStopping = false;
@@ -215,12 +265,15 @@ export const createInteractionSlice = (set, get) => ({
             // Find the last newline to ensure we don't cut in the middle of a token/syntax
             const lastNewlineIndex = rawChunk.lastIndexOf("\n");
             let safeChunk = rawChunk;
-            
+
             // Only trim if we found a newline and it's not the very end
-            if (lastNewlineIndex > 0 && lastNewlineIndex < rawChunk.length - 1) {
-               safeChunk = rawChunk.substring(0, lastNewlineIndex + 1);
+            if (
+              lastNewlineIndex > 0 &&
+              lastNewlineIndex < rawChunk.length - 1
+            ) {
+              safeChunk = rawChunk.substring(0, lastNewlineIndex + 1);
             }
-            
+
             fullRawText += safeChunk;
 
             // 2. CONTEXT TAIL INJECTION
@@ -229,9 +282,10 @@ export const createInteractionSlice = (set, get) => ({
             const tail = safeChunk.slice(-TAIL_SIZE);
 
             messagesForLLM.push({ role: "assistant", content: tail });
-            messagesForLLM.push({ 
-              role: "user", 
-              content: "The previous assistant message ends EXACTLY with the text above.\nContinue writing from the NEXT character.\nDO NOT repeat any existing text.\nDO NOT restart or summarize.\nDO NOT modify previous content." 
+            messagesForLLM.push({
+              role: "user",
+              content:
+                "The previous assistant message ends EXACTLY with the text above.\nContinue writing from the NEXT character.\nDO NOT repeat any existing text.\nDO NOT restart or summarize.\nDO NOT modify previous content.",
             });
 
             continueCount++;

@@ -3,7 +3,7 @@ import { useAIStore } from "../../stores/useAIStore";
 import { ENVIRONMENTS } from "../../stores/environment";
 import { useFileStore } from "../../stores/useFileStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import useEditorStore from "../../store/useEditorStore"; // Assumo che esista
+import useEditorStore from "../../stores/useEditorStore"; // Assumo che esista
 import { ChatMessage } from "./ChatMessage";
 import { PromptInput } from "./PromptInput";
 import Alert from "../ui/Alert";
