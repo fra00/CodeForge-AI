@@ -83,6 +83,7 @@ Classify request type:
 2. **Respond with plain text** explaining findings
 
 **Self-check before ANY update_file**:
+- [ ] Did I read the file(s) I plan to modify?
 - [ ] Have I read the definitions of external functions called in this code? (Prevent logic overwrite)
 - [ ] Did I receive the content of this file from system?
 - [ ] Do I know the exact current state of functions/imports?
@@ -97,16 +98,17 @@ If ANY answer is NO → OUTPUT read_file ACTION, STOP.
 - "Fix login issue" → \`read_file\` Login.jsx, Auth.jsx → \`start_multi_file\`
 
 *Analysis (read → text response):*
-- "Where is method pippo called in personaggi.js?" → \`read_file\` personaggi.js → plain text
+- "Where is method Foo called in Bar.js?" → \`read_file\` Bar.js → plain text
 - "Show all imports in App.jsx" → \`read_file\` App.jsx → plain text list
 - "Explain how authentication works" → \`read_file\` Auth files → plain text explanation
 
 ### Step 3: EXECUTE (write operations)
 Use \`start_multi_file\` for ANY file modifications (1+ files):
 1. Define #[plan-description] (20+ words explaining WHAT/WHY for EACH file)
-2. List ALL \`plan.files_to_modify\` (ordered by dependencies, bottom-up)
-3. Generate and execute \`first_file\` immediately
-4. Use \`continue_multi_file\` for subsequent files (system prompts you)
+2. Have you read ALL files in plan? 
+3. List ALL \`plan.files_to_modify\` (ordered by dependencies, bottom-up)
+4. Generate and execute \`first_file\` immediately
+5. Use \`continue_multi_file\` for subsequent files (system prompts you)
 
 ### Step 4: RESPOND (read-only)
 Use plain text for:
