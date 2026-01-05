@@ -100,6 +100,9 @@ export class TestTransformer {
       window.waitFor = waitFor;
       window.act = act;
 
+      // Polyfill per 'global' per compatibilità con librerie che si aspettano l'ambiente Node
+      window.global = window;
+
       // --- Environment Setup ---
       // Assicuriamo che esista un elemento 'root' nel DOM, poiché molto codice React
       // (es. main.jsx) tenta di accedervi globalmente per il mounting immediato.
