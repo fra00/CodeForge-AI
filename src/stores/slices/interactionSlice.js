@@ -5,6 +5,7 @@ import {
   getProjectStructurePrompt,
 } from "../ai/systemPromptCompact";
 import { getRouterPrompt } from "../ai/prompts/intent";
+import { getScoutPrompt } from "../ai/prompts/scout";
 import { getResponseSchema } from "../ai/responseSchema";
 import { FRAMEWORK_2WHAV_PROMPT } from "../ai/2whavPrompt";
 import { useFileStore } from "../useFileStore";
@@ -100,6 +101,7 @@ export const createInteractionSlice = (set, get) => ({
       // Saltiamo questo step se c'è un task multi-file in corso (l'utente potrebbe dare feedback sul task).
       const isMultiFileInProgress = get().multiFileTaskState != null;
 
+      let detectedIntent = "project"; // Default
       if (!isMultiFileInProgress && userMessage && userMessage.trim()) {
         try {
           const routerPrompt = getRouterPrompt(userMessage);
@@ -118,14 +120,16 @@ export const createInteractionSlice = (set, get) => ({
           try {
             // Tentativo di parsing JSON dalla risposta del router
             const text = routerResponse.text || (routerResponse.content && routerResponse.content[0]?.text) || "";
-            // Pulizia base per JSON (rimuove markdown ```json ... ``` se presente)
-            const cleanJson = text.replace(/```json|```/g, "").trim();
-            routerResult = JSON.parse(cleanJson);
+            // Robust JSON extraction: find the first { ... } block
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const jsonString = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, "").trim();
+            routerResult = JSON.parse(jsonString);
           } catch (e) {
             console.warn("[Router] Failed to parse router response, defaulting to project intent.", e);
           }
 
           // Se l'intento è "general", rispondiamo subito e chiudiamo.
+          // Se è "project", proseguiamo al prossimo step (Scout -> Executor)
           if (routerResult && routerResult.intent === "general" && routerResult.reply) {
             addMessage({
               id: Date.now().toString(),
@@ -136,11 +140,85 @@ export const createInteractionSlice = (set, get) => ({
             await get().saveConversation();
             return; // STOP HERE - Non attivare l'Executor
           }
+          if (routerResult?.intent) detectedIntent = routerResult.intent;
 
           // Se l'intento è "project" o il parsing fallisce, proseguiamo con il flusso standard.
         } catch (routerError) {
           console.error("[Router] Error during classification:", routerError);
           // In caso di errore del router, proseguiamo col flusso standard per sicurezza
+        }
+      }
+
+      // --- 1. SCOUTING PHASE (FILE SELECTION) ---
+      // Se l'intento è relativo al progetto, identifichiamo i file rilevanti PRIMA di chiamare l'Executor.
+      // Questo evita il round-trip "read_file" iniziale.
+      let scoutedFilesContent = "";
+      
+      if (detectedIntent === "project" && !isMultiFileInProgress && userMessage) {
+        try {
+          addMessage({ id: "scout-status", role: "status", content: "🔍 Scouting relevant files..." });
+          
+          // Prepare context for Scout
+          const currentChat = get().conversations.find(c => c.id === currentChatId);
+          const knowledgeSummary = currentChat?.knowledgeSummary || "";
+          const environment = currentChat?.environment || "web";
+          
+          // Construct lightweight context hint
+          let contextHint = "";
+          if (context?.currentFile && context.currentFile !== "none") {
+            contextHint += `Active file in editor: ${context.currentFile}\n`;
+          }
+          const pinnedFiles = get().contextFiles || [];
+          if (pinnedFiles.length > 0) {
+            contextHint += `Pinned files: ${pinnedFiles.join(", ")}\n`;
+          }
+
+          const scoutPrompt = getScoutPrompt(userMessage, fileStore, knowledgeSummary, contextHint, environment);
+          const scoutResponse = await getChatCompletion({
+            provider,
+            apiKey,
+            modelName, // Possiamo usare un modello veloce qui
+            messages: [{ role: "user", content: scoutPrompt }],
+            stream: false,
+            maxTokens: 8192,
+          });
+
+          const text = scoutResponse.text || (scoutResponse.content && scoutResponse.content[0]?.text) || "";
+          // Robust JSON extraction for Scout
+          const scoutJsonMatch = text.match(/\{[\s\S]*\}/);
+          const scoutJsonString = scoutJsonMatch ? scoutJsonMatch[0] : text.replace(/```json|```/g, "").trim();
+          const scoutResult = JSON.parse(scoutJsonString);
+
+          if (scoutResult && Array.isArray(scoutResult.files) && scoutResult.files.length > 0) {
+            const foundFiles = [];
+            const allFiles = Object.values(fileStore.files);
+            
+            scoutResult.files.forEach(path => {
+              const fileNode = allFiles.find(f => normalizePath(f.path) === normalizePath(path));
+              if (fileNode && !fileNode.isFolder) {
+                foundFiles.push(`--- ${fileNode.path} ---\n${fileNode.content}`);
+              }
+            });
+
+            if (foundFiles.length > 0) {
+              scoutedFilesContent = foundFiles.join("\n\n");
+              // Aggiorniamo lo status per l'utente
+              set((state) => ({
+                conversations: state.conversations.map(c => c.id === currentChatId ? {
+                  ...c,
+                  messages: c.messages.filter(m => m.id !== "scout-status") // Rimuovi status temporaneo
+                } : c)
+              }));
+              addMessage({ 
+                id: Date.now().toString(), 
+                role: "status", 
+                content: `📂 Context loaded: ${scoutResult.files.join(", ")}` 
+              });
+            }
+          }
+        } catch (scoutError) {
+          console.warn("[Scout] Failed to identify files:", scoutError);
+          // Fallback: procediamo senza file pre-caricati, l'Executor userà read_file se necessario
         }
       }
 
@@ -178,7 +256,7 @@ export const createInteractionSlice = (set, get) => ({
         const currentMultiFileState = get().multiFileTaskState;
 
         const allFiles = Object.values(useFileStore.getState().files);
-        const userProvidedContext = contextFiles
+        let userProvidedContext = contextFiles
           .map((path) => {
             const file = allFiles.find((f) => f && f.path === path);
             if (file) {
@@ -187,6 +265,11 @@ export const createInteractionSlice = (set, get) => ({
             return `--- ${path} ---\n(File not found)`;
           })
           .join("\n\n");
+
+        // Aggiungiamo i file trovati dallo Scout al contesto utente
+        if (scoutedFilesContent) {
+          userProvidedContext = (userProvidedContext ? userProvidedContext + "\n\n" : "") + scoutedFilesContent;
+        }
 
         const systemPromptWithContext = buildSystemPrompt(
           context,

@@ -57,6 +57,7 @@ Classify request type:
 **Classification**:
 - **Read-only queries** (explain/analyze/show) → Use read_file, then respond with text
 - **Modification/Debugging** (add/change/fix/create/debug) → Use read_file, then use file operations
+- **Context Check** → If file content is present in "USER-PROVIDED CONTEXT", SKIP read_file.
 
 **🚨 CRITICAL RULE**: 
   You CANNOT use \`update_file\` on a file you haven't read in this conversation.
@@ -74,8 +75,10 @@ Classify request type:
   - files needed to understand context
 
 **Workflow for modifications**:
-1. **ALWAYS read first**: Use \`tool_call\` → \`read_file\` with \`paths: ["file1.js", "file2.js"]\`
-2. **Wait for system response** with file contents
+1. **CHECK CONTEXT**: Is the file content already visible in \`--- USER-PROVIDED CONTEXT ---\`?
+   - **YES** → Proceed to Step 3 (Modify).
+   - **NO** → Use \`tool_call\` → \`read_file\`.
+2. **Wait for system response** (if read_file was used).
 3. **Then modify**: Use \`start_multi_file\` based on actual content
 
 **Workflow for analysis** (no modifications):
@@ -84,7 +87,7 @@ Classify request type:
 
 **Self-check before ANY update_file**:
 - [ ] Did I read the file(s) I plan to modify?
-- [ ] Have I read the definitions of external functions called in this code? (Prevent logic overwrite)
+- [ ] OR is the content already provided in the context?
 - [ ] Did I receive the content of this file from system?
 - [ ] Do I know the exact current state of functions/imports?
 - [ ] Am I modifying based on actual code, not assumptions?
@@ -94,8 +97,8 @@ If ANY answer is NO → OUTPUT read_file ACTION, STOP.
 **Examples**:
 
 *Modifications (read → modify):*
-- "Add button to Header.jsx" → \`read_file\` Header.jsx → \`start_multi_file\`
-- "Fix login issue" → \`read_file\` Login.jsx, Auth.jsx → \`start_multi_file\`
+- "Add button to Header.jsx" (Header.jsx NOT in context) → \`read_file\` Header.jsx → \`start_multi_file\`
+- "Add button to Header.jsx" (Header.jsx IS in context) → \`start_multi_file\` (IMMEDIATE)
 
 *Analysis (read → text response):*
 - "Where is method Foo called in Bar.js?" → \`read_file\` Bar.js → plain text
@@ -242,7 +245,7 @@ Required fields:
 - \`plan.files_to_modify\`: Array of ALL files (ordered by dependencies)
 - \`first_file\`: First file action (with tags)
 - #[file-message]: 10+ words explaining THIS file's change
-- #[content-file]: Complete file code
+- #[content-file]: **REQUIRED**. Complete code for the file defined in \`first_file\`.
 
 **Plan-Files Alignment (CRITICAL)**:
 Every file in plan description MUST be in \`files_to_modify\` array.

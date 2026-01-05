@@ -589,17 +589,26 @@ export const useFileStore = create((set, get) => ({
 
     try {
       if (actionType === "create_file") {
+        if (content === undefined) {
+          return `✗ ERROR: Missing content for create_file on ${normalizedPath}. Ensure #[content-file] block is provided and correctly formatted.`;
+        }
         _createNodeFromPath(normalizedPath, content, tags);
         return `✓ File ${normalizedPath} created. \n\n Content: ${content}`;
       } else if (actionType === "update_file") {
         const existingNode = findNodeByPath(state.files, normalizedPath);
         if (!existingNode) {
           // Se il file non esiste, lo creiamo (comportamento upsert)
+          if (content === undefined) {
+            return `✗ ERROR: Missing content for update_file (new) on ${normalizedPath}. Ensure #[content-file] block is provided.`;
+          }
           _createNodeFromPath(normalizedPath, content, tags);
           return `✓ File ${normalizedPath} created (was missing).`;
         }
         if (existingNode.isFolder) {
           return `✗ ERROR: Cannot update ${normalizedPath}, it is a folder.`;
+        }
+        if (content === undefined) {
+          return `✗ ERROR: Missing content for update_file on ${normalizedPath}. Did you forget the #[content-file] block?`;
         }
         updateFileContent(existingNode.id, content, tags);
         return `✓ File ${normalizedPath} updated. \n\n New Content: ${content}`;
