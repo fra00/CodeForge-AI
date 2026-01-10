@@ -21,12 +21,12 @@ const initialMessages = [
   },
 ];
 
-const createNewChat = (id) => ({
+const createNewChat = (id, environment = "web") => ({
   id: id || Date.now().toString(),
   title: "Nuova Chat",
   messages: initialMessages,
   timestamp: new Date().toISOString(),
-  environment: "web",
+  environment: environment,
   knowledgeSummary: "",
   isSummarizing: false,
 });
@@ -107,8 +107,8 @@ export const createChatSlice = (set, get) => ({
     }
   },
 
-  newChat: () => {
-    const newChatObj = createNewChat();
+  newChat: (environment = "web") => {
+    const newChatObj = createNewChat(null, environment);
 
     // --- VFS CACHE HYDRATION ---
     // Quando si crea una nuova chat, proviamo a pre-popolarla con la conoscenza
@@ -287,5 +287,15 @@ export const createChatSlice = (set, get) => ({
       ),
     }));
     get().saveConversation(chatId);
+  },
+
+  setChatEnvironment: (environment) => {
+    const { currentChatId, conversations } = get();
+    set({
+      conversations: conversations.map((c) =>
+        c.id === currentChatId ? { ...c, environment } : c
+      ),
+    });
+    get().saveConversation();
   },
 });

@@ -125,24 +125,24 @@ export const ENVIRONMENTS = {
 - For project structure, consider using CMake.
     `,
   },
-  java: {
-    label: "Java",
-    rules: `
-# JAVA CONTEXT RULES
-- You are an expert in Java and the JVM ecosystem.
-- Assume a recent LTS version of Java (e.g., Java 17 or 21).
-- Use standard build tools like Maven or Gradle for project structure.
-- Pay attention to Java conventions, exception handling, and common design patterns.
-    `,
-  },
-  python: {
-    label: "Python",
-    rules: `
-# PYTHON CONTEXT RULES
-- You are an expert in Python 3.
-- Follow PEP 8 style guidelines.
-- Use virtual environments and 'pip' for dependency management.
-- Be mindful of common libraries for tasks (e.g., requests for HTTP, pandas for data, Flask/Django for web).
-    `,
-  },
+//   java: {
+//     label: "Java",
+//     rules: `
+// # JAVA CONTEXT RULES
+// - You are an expert in Java and the JVM ecosystem.
+// - Assume a recent LTS version of Java (e.g., Java 17 or 21).
+// - Use standard build tools like Maven or Gradle for project structure.
+// - Pay attention to Java conventions, exception handling, and common design patterns.
+//     `,
+//   },
+//   python: {
+//     label: "Python",
+//     rules: `
+// # PYTHON CONTEXT RULES
+// - You are an expert in Python 3.
+// - Follow PEP 8 style guidelines.
+// - Use virtual environments and 'pip' for dependency management.
+// - Be mindful of common libraries for tasks (e.g., requests for HTTP, pandas for data, Flask/Django for web).
+//     `,
+//   },
 };

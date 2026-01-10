@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
+import { Lock } from "lucide-react";
 import { useAIStore } from "../../stores/useAIStore";
 import { ENVIRONMENTS } from "../../stores/environment";
 import { useFileStore } from "../../stores/useFileStore";
@@ -41,7 +42,25 @@ export function AIPanel({
   const currentChat = useAIStore((state) =>
     state.conversations.find((c) => c.id === state.currentChatId)
   );
-  const currentEnvironment = currentChat?.environment || "web"; // Default a 'web'
+
+  // Recupera l'environment dal progetto (Source of Truth) leggendo il file di configurazione
+  const projectEnvironment = useFileStore((state) => {
+    const configFile = Object.values(state.files).find(
+      (f) =>
+        f.path === "/.llmContext/project.json" ||
+        f.path === ".llmContext/project.json"
+    );
+    if (configFile && configFile.content) {
+      try {
+        return JSON.parse(configFile.content).environment;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const currentEnvironment =
+    projectEnvironment || currentChat?.environment || "web";
 
   const messages = useAIStore((state) => state.getMessages());
 
@@ -158,6 +177,13 @@ export function AIPanel({
       <div className="flex items-center justify-between p-2 border-b border-editor-border h-10 text-xs flex-shrink-0">
         <KnowledgeCacheIndicator />
         <div className="flex items-center">
+          {projectEnvironment && (
+            <Lock
+              size={12}
+              className="mr-1 text-gray-500"
+              title="Environment vincolato al progetto"
+            />
+          )}
           <label htmlFor="env-select" className="mr-2 text-gray-400">
             Contesto:
           </label>
@@ -165,9 +191,13 @@ export function AIPanel({
             id="env-select"
             value={currentEnvironment}
             onChange={handleEnvironmentChange}
-            disabled={isGenerating}
-            className="bg-editor-highlight border border-editor-border rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-            title="Seleziona il contesto di programmazione per l'AI"
+            disabled={isGenerating || !!projectEnvironment}
+            className={`bg-editor-highlight border border-editor-border rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${projectEnvironment ? "cursor-not-allowed text-gray-400" : ""}`}
+            title={
+              projectEnvironment
+                ? "Ambiente gestito dalle impostazioni di progetto"
+                : "Seleziona il contesto di programmazione per l'AI"
+            }
           >
             {Object.entries(ENVIRONMENTS).map(([key, { label }]) => (
               <option key={key} value={key}>

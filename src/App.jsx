@@ -15,16 +15,16 @@ import { useMediaQuery } from "./hooks/useMediaQuery";
 import { StatusBar } from "./components/Editor/StatusBar"; // Riutilizzo la StatusBar dell'editor come status bar principale
 import { useAutoSave } from "./hooks/useAutoSave"; // Importo useAutoSave per lo stato di salvataggio
 
-import { SnippetPanel } from "./components/Snippets/SnippetPanel";
 import { FileExplorer } from "./components/FileSystem/FileExplorer";
 import { AIPanel } from "./components/AI/AIPanel";
 import { ChatHistoryPanel } from "./components/AI/ChatHistoryPanel"; // Importa il pannello
-import { LivePreview } from "./components/Preview/LivePreview";
+import { PreviewContainer } from "./components/Preview/PreviewContainer";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 // La ErrorDialog non è più necessaria, il sistema ora è automatico.
 import { useTestRunner } from "./hooks/useTestRunner";
 import { TestResultsPanel } from "./components/Testing/TestResultsPanel";
 import { BlockingOverlay } from "./components/Layout/BlockingOverlay";
+import { NewProjectModal } from "./components/Modals/NewProjectModal";
 
 // Importa i CSS dei componenti UI riutilizzabili
 import "./components/ui/Dialog.css";
@@ -42,6 +42,8 @@ function App() {
     (state) => state.importProjectFromZip
   );
   const resetProject = useFileStore((state) => state.resetProject);
+  const createFileOrFolder = useFileStore((state) => state.createFileOrFolder);
+  const rootId = useFileStore((state) => state.rootId);
   // Recupera le funzioni per la gestione della chat AI
   const {
     conversations,
@@ -52,6 +54,7 @@ function App() {
     loadConversations: loadAiConversations,
     extendPromptWith2WHAV, // Recupera la nuova funzione
     setInitialPrompt: setAiInitialPrompt, // Recupera l'azione dallo store
+    setChatEnvironment,
   } = useAIStore();
   const {
     runTests,
@@ -81,6 +84,7 @@ function App() {
   const [activePanel, setActivePanel] = useState("editor");
   const [runtimeErrors, setRuntimeErrors] = useState([]);
   const [isTestPanelCollapsed, setIsTestPanelCollapsed] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   // Lo stato showFileExplorer non è più necessario, la visibilità è gestita da useSettingsStore
 
@@ -89,6 +93,34 @@ function App() {
     loadFiles();
     loadAiConversations();
   }, [loadFiles]);
+
+  // Sincronizza l'environment della chat con quello del progetto al caricamento
+  useEffect(() => {
+    if (isInitialized && conversations.length > 0) {
+      const state = useFileStore.getState();
+      const files = state.files;
+      const configFile = Object.values(files).find(
+        (f) =>
+          f.path === "/.llmContext/project.json" ||
+          f.path === ".llmContext/project.json"
+      );
+
+      if (configFile && configFile.content) {
+        try {
+          const config = JSON.parse(configFile.content);
+          if (config.environment) {
+            const currentChat = conversations.find((c) => c.id === currentChatId);
+            // Se l'environment della chat è diverso da quello del progetto, lo aggiorniamo
+            if (currentChat && currentChat.environment !== config.environment) {
+              setChatEnvironment(config.environment);
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing project.json for env sync:", e);
+        }
+      }
+    }
+  }, [isInitialized, conversations, currentChatId, setChatEnvironment]);
 
   // Imposta il gestore di errori per l'iframe
   useEffect(() => {
@@ -161,16 +193,68 @@ function App() {
     }
   }, [isMobile, setFileExplorerVisible]);
 
+  // Gestione creazione nuovo progetto
+  const handleNewProjectRequest = () => {
+    setIsNewProjectModalOpen(true);
+  };
+
+  const handleCreateProject = async (environment) => {
+    await resetProject();
+
+    // 1. Persistenza Environment: Crea cartella e file di configurazione nel VFS
+    const configFolder = createFileOrFolder(rootId, ".llmContext", true);
+    if (configFolder) {
+      const configContent = JSON.stringify(
+        {
+          environment: environment,
+          created_at: new Date().toISOString(),
+          version: "1.0",
+        },
+        null,
+        2
+      );
+      createFileOrFolder(configFolder.id, "project.json", false, configContent);
+    }
+
+    // 2. Inizializza la chat con l'environment selezionato
+    newChat(environment);
+    setIsNewProjectModalOpen(false);
+  };
+
   // Funzioni di callback per l'Header
-  const handleNewProject = resetProject;
+  const handleNewProject = handleNewProjectRequest;
   const handleExport = downloadProjectZip; // Collega la funzione dello store
   const handleOpenSettings = () => setActivePanel("settings");
 
   // Funzione per gestire l'importazione
-  const handleImport = (event) => {
+  const handleImport = async (event) => {
     const file = event.target.files[0];
     if (file) {
-      importProjectFromZip(file);
+      await importProjectFromZip(file);
+
+      // 3. Rilevamento Environment: Legge il file di configurazione dal VFS
+      const state = useFileStore.getState();
+      const files = state.files;
+      const configFile = Object.values(files).find(
+        (f) =>
+          f.path === "/.llmContext/project.json" ||
+          f.path === ".llmContext/project.json"
+      );
+
+      let env = "web"; // Fallback default
+      if (configFile && configFile.content) {
+        try {
+          const config = JSON.parse(configFile.content);
+          if (config.environment) {
+            env = config.environment;
+          }
+        } catch (e) {
+          console.error("Errore parsing project.json:", e);
+        }
+      }
+
+      // Allinea la chat con l'environment rilevato
+      newChat(env);
     }
     // Resetta l'input per permettere di caricare lo stesso file di nuovo
     event.target.value = null;
@@ -243,7 +327,7 @@ function App() {
                 defaultSize={100 - editorPreviewSplitSize}
                 minSize={20}
               >
-                <LivePreview onRefresh={clearRuntimeErrors} />
+                <PreviewContainer onRefresh={clearRuntimeErrors} />
               </ResizablePanel>
             </>
           )}
@@ -255,14 +339,11 @@ function App() {
       // AIPanel internamente la userà per il pulsante "Estendi Prompt".
       mainContent = <AIPanel extendPromptAction={extendPromptWith2WHAV} />;
       break;
-    case "snippets":
-      mainContent = <SnippetPanel />;
-      break;
     case "settings":
       mainContent = <SettingsPanel />;
       break;
     case "live-preview": // Nuovo pannello per la preview a schermo intero su mobile
-      mainContent = <LivePreview onRefresh={clearRuntimeErrors} />;
+      mainContent = <PreviewContainer onRefresh={clearRuntimeErrors} />;
       break;
     default:
       mainContent = <AIPanel />;
@@ -282,6 +363,12 @@ function App() {
       />
 
       {isBlockingOperation && <BlockingOverlay />}
+
+      <NewProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onConfirm={handleCreateProject}
+      />
 
       {/* Input nascosto per l'upload del file ZIP */}
       <input
@@ -350,11 +437,18 @@ function App() {
                 className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
                 title="Rerun All Tests"
               >
-                <RotateCcw size={14} className={isTesting ? "animate-spin" : ""} />
+                <RotateCcw
+                  size={14}
+                  className={isTesting ? "animate-spin" : ""}
+                />
               </button>
             </div>
             <button className="text-gray-400 hover:text-white focus:outline-none">
-              {isTestPanelCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {isTestPanelCollapsed ? (
+                <ChevronUp size={16} />
+              ) : (
+                <ChevronDown size={16} />
+              )}
             </button>
           </div>
           {!isTestPanelCollapsed && (
