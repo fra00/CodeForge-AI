@@ -12,7 +12,7 @@ export function BuildPanel({ environment, className = "" }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const [currentAction, setCurrentAction] = useState(null);
   const [arduinoConfig, setArduinoConfig] = useState({
-    board: "arduino:avr:uno",
+    board: environment === "esp32" ? "esp32:esp32:esp32" : "arduino:avr:uno",
     port: "COM3",
   });
   const outputRef = useRef(null);
@@ -105,7 +105,7 @@ export function BuildPanel({ environment, className = "" }) {
         action: actionType,
         environment: environment,
         payload: zipBase64,
-        arduinoConfig: environment === "arduino" ? arduinoConfig : undefined,
+        arduinoConfig: (environment === "arduino" || environment === "esp32") ? arduinoConfig : undefined,
       };
 
       if (window.chrome?.webview) {
@@ -143,7 +143,7 @@ export function BuildPanel({ environment, className = "" }) {
         </span>
         <div className="h-4 w-[1px] bg-[#333] mx-2"></div>
 
-        {environment === "arduino" && (
+        {(environment === "arduino" || environment === "esp32") && (
           <div className="flex items-center space-x-2 mr-2">
             <div className="flex items-center bg-[#333] border border-[#444] rounded px-2 py-1" title="Select Board">
               <Cpu size={12} className="text-gray-400 mr-2" />
@@ -154,12 +154,23 @@ export function BuildPanel({ environment, className = "" }) {
                   setArduinoConfig({ ...arduinoConfig, board: e.target.value })
                 }
               >
-                <option value="arduino:avr:uno">Arduino Uno</option>
-                <option value="arduino:avr:nano">Arduino Nano</option>
-                <option value="arduino:avr:mega">Arduino Mega</option>
-                <option value="arduino:renesas_uno:minima">Arduino Uno R4 Minima</option>
-                <option value="arduino:renesas_uno:unor4wifi">Arduino Uno R4 WiFi</option>
-                <option value="esp32:esp32:esp32">ESP32 Dev Module</option>
+                {environment === "arduino" && (
+                  <>
+                    <option value="arduino:avr:uno">Arduino Uno</option>
+                    <option value="arduino:avr:nano">Arduino Nano</option>
+                    <option value="arduino:avr:mega">Arduino Mega</option>
+                    <option value="arduino:renesas_uno:minima">Arduino Uno R4 Minima</option>
+                    <option value="arduino:renesas_uno:unor4wifi">Arduino Uno R4 WiFi</option>
+                  </>
+                )}
+                {environment === "esp32" && (
+                  <>
+                    <option value="esp32:esp32:esp32">ESP32 Dev Module</option>
+                    <option value="esp32:esp32:esp32s2">ESP32-S2 Dev Module</option>
+                    <option value="esp32:esp32:esp32s3">ESP32-S3 Dev Module</option>
+                    <option value="esp32:esp32:esp32c3">ESP32-C3 Dev Module</option>
+                  </>
+                )}
               </select>
             </div>
 

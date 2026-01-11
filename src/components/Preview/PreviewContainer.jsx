@@ -21,5 +21,11 @@ export function PreviewContainer({ onRefresh, className = "" }) {
   }
 
   // Per tutti gli altri (C#, Arduino, Python, ecc.) mostra il pannello di compilazione
-  return <BuildPanel environment={environment} className={className} />;
+  return (
+    <BuildPanel
+      key={environment}
+      environment={environment}
+      className={className}
+    />
+  );
 }
